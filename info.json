@@ -1,0 +1,10 @@
+{
+  "name": "towerdefense",
+  "version": "0.1.0",
+  "factorio_version": "0.16",
+  "title": "Tower Defense",
+  "author": "blueblue",
+  "contact": "deep.blueeee@yahoo.de",
+  "description": "So this is tower defense ... nope, it's still factorio, mostly.",
+  "dependencies": ["base >= 0.16.0"]
+}

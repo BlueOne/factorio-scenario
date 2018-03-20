@@ -1,0 +1,6 @@
+[submodule "factorio-utilities"]
+	path = Utils
+	url = https://github.com/BlueOne/factorio-utilities
+[submodule "scenarios/towerdefense_basic/factorio-utilities"]
+	path = scenarios/towerdefense_basic/Utils
+	url = https://github.com/BlueOne/factorio-utilities
