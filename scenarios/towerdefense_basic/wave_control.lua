@@ -159,11 +159,8 @@ function WaveCtrl.next_wave(wave_control)
     end
     wave_control.active_wave_index = wave_control.spawning_wave_index
     wave_control.spawning_wave_index = wave_control.spawning_wave_index + 1
-    if wave_control.active_wave_index > 0 then
-        game.print("Wave " .. wave_control.active_wave_index .. " has started.")
-    else
+    if wave_control.active_wave_index == 0 then
         wave_control.next_wave_tick = game.tick + wave_control.initial_wait
-        game.print("First wave starting soon!")
         wave_control.next_unit_tick = 1
         return
     end
@@ -179,7 +176,7 @@ function WaveCtrl.next_wave(wave_control)
     end
 
     local event = {
-        now_active_wave_index = wave_control.active_wave_index,
+        wave_index = wave_control.active_wave_index,
         waves_ended = waves_ended
     }
     script.raise_event(WaveCtrl.on_wave_starting, event)
@@ -305,6 +302,11 @@ end)
 --     },
 --     duration = 60*60*1.5
 -- }
+
+
+function WaveCtrl.delay_wave(wave_control, time)
+    wave_control.next_wave_tick = wave_control.next_wave_tick + time
+end
 
 function WaveCtrl.make_wave(wave_control, wave)
     wave.finished_spawning = false

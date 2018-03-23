@@ -99,20 +99,28 @@ function UpgradeSystem.create_ui(player)
     
 
     for _, upgrade in pairs(upgrade_system.available_upgrades) do
-        local name = upgrade.name
-        local cost_label = upgrade_table.add{type="button", style="icon_button", caption=upgrade.cost, name="upgrade_cost_" .. name, tooltip="Purchase"}
-        cost_label.style.height = 30
-        cost_label.style.width = 30
-        cost_label.style.top_padding = 0
-        --local cost_label = upgrade_table.add{type="button", style="recipe_slot_button", caption=upgrade.cost, name="upgrade_cost_" .. name}
-        cost_label.style.font_color = UpgradeSystem.artifact_color
-        cost_label.style.font = "default-bold"
-        upgrade_table.add{type="sprite", name="upgrade_sprite_" .. name, sprite=upgrade.icon}
-        upgrade_table.add{type="label", name="upgrade_name_" .. name, caption=formatted_upgrade_name(upgrade) .. "  [?]", tooltip=upgrade.description}
+        if not upgrade.disabled then
+            UpgradeSystem.add_upgrade_to_ui(upgrade, player)
+        end
     end
 
         
     GuiUtils.make_hide_button(player, frame, true, UpgradeSystem.artifact_sprite)
+end
+
+function UpgradeSystem.add_upgrade_to_ui(upgrade, player)
+    local parent = mod_gui.get_frame_flow(player).upgradeframe.upgrade_scroll.upgrade_table
+    local name = upgrade.name
+    local cost_label = parent.add{type="button", style="icon_button", caption=upgrade.cost, name="upgrade_cost_" .. name, tooltip="Purchase"}
+    upgrade.cost_label = cost_label
+    cost_label.style.height = 30
+    cost_label.style.width = 30
+    cost_label.style.top_padding = 0
+    --local cost_label = upgrade_table.add{type="button", style="recipe_slot_button", caption=upgrade.cost, name="upgrade_cost_" .. name}
+    cost_label.style.font_color = UpgradeSystem.artifact_color
+    cost_label.style.font = "default-bold"
+    parent.add{type="sprite", name="upgrade_sprite_" .. name, sprite=upgrade.icon}
+    parent.add{type="label", name="upgrade_name_" .. name, caption=formatted_upgrade_name(upgrade) .. "  [?]", tooltip=upgrade.description}
 end
 
 function UpgradeSystem.get_ui(player)
@@ -123,17 +131,19 @@ end
 -- Award money
 -------------------------------------------------------------------------------
 
-function UpgradeSystem.give_money(force, amount, surface, position)
+function UpgradeSystem.give_money(force, amount, surface, positions)
     local upgrade_system = UpgradeSystem.get_force_upgrade_system(force)
     upgrade_system.money = upgrade_system.money + amount
-    if surface and position then
-        local text
-        if amount > 0 then
-            text = "+" .. amount
-        else
-            text = "-" .. amount
+    if surface then
+        for _, position in pairs(positions or {}) do
+            local text
+            if amount > 0 then
+                text = "+" .. amount
+            else
+                text = "-" .. amount
+            end
+            surface.create_entity{name = "flying-text", position = position, text = text, color = UpgradeSystem.artifact_color}    
         end
-        surface.create_entity{name = "flying-text", position = position, text = text, color = UpgradeSystem.artifact_color}    
     end
 
     for _, player in  pairs(upgrade_system.force.players) do
@@ -156,11 +166,13 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
 
     if upgrade_system.money < upgrade.cost then
         buying_player.print("Purchase failed: Not enough money!")
+        buying_player.play_sound{path="utility/cannot_build"}
     else
         local error
         if upgrade.action then 
             error = upgrade.action(global.game_control, upgrade) 
-        elseif upgrade.unlock then
+        end
+        if not error and upgrade.unlock then
             local unlock = upgrade.unlock
             if type(unlock) == "string" then unlock = {unlock} end
             for _, tech in pairs(unlock) do
@@ -173,13 +185,34 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
                     end
                 end
                 if not found then
+                    buying_player.print("Purchase failed: Not enough money!")
                     game.print("Error: Technology Unlock not found: " .. tech .. ". This may constitute a bug.")
                 end
             end
         end
         
         if not error then
-            upgrade_system.force.print("Purchased Upgrade: " .. formatted_upgrade_name(upgrade))
+            upgrade_system.force.play_sound{path="utility/research_completed", }        
+            upgrade_system.force.print("Unlocked: " .. formatted_upgrade_name(upgrade))
+            for _, player in pairs(upgrade_system.force.players) do
+                if player.character then
+                    player.surface.create_entity{name = "flying-text", position = player.position, text = "Unlocked: " .. formatted_upgrade_name(upgrade)}
+                end
+            end
+            
+            -- Prerequisites
+            for _, upgr in pairs(upgrade_system.available_upgrades) do
+                if upgr.disabled and upgr.prerequisites then
+                    for i, prereq in pairs(upgr.prerequisites) do
+                        upgr.prerequisites[i] = nil
+                        if not next(upgr.prerequisites) then
+                            upgr.disabled = false
+                            UpgradeSystem.add_upgrade_to_ui(upgr, player)
+                        end
+                    end
+                end
+            end
+
             UpgradeSystem.give_money(upgrade_system.force, -upgrade.cost)
             if level >= level_max then
                 upgrade_system.available_upgrades[upgrade_key] = nil
@@ -192,9 +225,10 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
                 end
             else
                 -- Update cost
+                -- Can be linear, double, constant
                 if upgrade.cost_increase == "linear" or not upgrade.cost_increase then
                     upgrade.cost = upgrade.cost + 1
-                elseif upgrade.cost_increase == "double" then
+                elseif upgrade.cost_increase == "double" or upgrade.cost_increase == "exponential" then
                     upgrade.cost = upgrade.cost * 2
                 end
                 upgrade.level = level + 1
@@ -208,8 +242,10 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
             return true
         elseif type(error) == "string" then 
             buying_player.print("Purchase failed: " .. error)
+            buying_player.play_sound{path="utility/cannot_build", }            
         else
             buying_player.print("Purchase failed: Unrecognized error." .. serpent.block(error))
+            buying_player.play_sound{path="utility/cannot_build", }            
         end
     end
 end
@@ -218,6 +254,24 @@ end
 --  System
 -------------------------------------------------------------------------------
 
+-- upgrades is a list of upgrades, each upgrade has the form 
+-- {
+--     name = "name",
+--     description = "Long Description",
+--     cost = 5,
+--     icon = "item/lab", -- spritepath
+--     max_level = 2, -- optional, if given this upgrade will get multiple levels
+--     cost_increase = "double", -- if this upgrade has multiple levels, this determines the way the costs are determined. Can be one of constant, linear, double/exponential. Linear is default.
+--     unlocks = {
+--         tech1, 
+--         tech2, 
+--     }
+--     action = function(game_control, upgrade_data)
+--         WaveCtrl.delay_wave(game_control.wave_control, 3 * 60 * 60)
+--     end
+-- }
+
+
 function UpgradeSystem.init(upgrades, force, money)
     local upgrade_system = {
         force = force or game.forces.player, 
@@ -225,6 +279,11 @@ function UpgradeSystem.init(upgrades, force, money)
         money = money or 0
     }
 
+    for _, upgrade in pairs(upgrade_system.available_upgrades) do
+        if next(upgrade.prerequisites or {}) then
+            upgrade.disabled = true
+        end
+    end
     global.UpgradeSystem.upgrade_systems_by_force[force.name] = upgrade_system
     return upgrade_system
 end
