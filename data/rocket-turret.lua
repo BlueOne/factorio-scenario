@@ -82,11 +82,10 @@ Table.merge_into_first{entity, {
   {
     type = "projectile",
     ammo_category = "rocket",
-    cooldown = 75, --75
+    cooldown = 75,
     projectile_creation_distance = 1.39375,
     projectile_center = {0.0625, -0.0875}, -- same as rocket_turret_attack shift
     damage_modifier = 1, --1.2  
--- Raising the damage  and reducing the cooldown make incendiary too powerful because fire DoTs are unaffected by cooldown
     shell_particle =
     {
       name = "shell-particle",
@@ -98,8 +97,9 @@ Table.merge_into_first{entity, {
       starting_frame_speed = 0.2,
       starting_frame_speed_deviation = 0.1
     },
-    range = 25,
-    min_range = 2,
+    turn_range = 0.28,     
+    range = 30,
+    min_range = 10,
     sound =
     {
       {
@@ -134,7 +134,8 @@ Table.merge_into_first{recipe,
     {
       {"iron-gear-wheel", 10},
       {"copper-plate", 20},
-      {"steel-plate", 15}
+      {"steel-plate", 15},
+      {"advanced-circuit", 10},
     },
   },
 }

@@ -24,6 +24,7 @@ local GuiEvent = require("stdlib.event.gui")
 UpgradeSystem.artifact_color = {r = 1, g = 0.5, b = 0.7, a = 1}
 --local red_color = {r=1, g=0.1, b=0.1, a=0.2}
 UpgradeSystem.artifact_sprite = "item/alien-artifact"
+UpgradeSystem.artifact_tooltip = "Obtain Alien Artifacts by killing waves or spawners."
 
 
 
@@ -81,18 +82,18 @@ function UpgradeSystem.create_ui(player)
     frame.style.visible = false
     local top_flow = frame.add{name="top_flow", type="flow", direction = "horizontal"}
 
-    local label = top_flow.add{type="label", caption="Upgrades", tooltip = "Alien Artifacts can be used to buy goods and services."}
+    local label = top_flow.add{type="label", caption="Upgrades", tooltip = UpgradeSystem.artifact_tooltip}
     label.style.font = "default-large-bold"
     
     label.style.right_padding = 100
     local value_label = top_flow.add{name="money_label", type="label", caption="0"}
     value_label.style.font_color = UpgradeSystem.artifact_color
     value_label.style.font = "default-large-bold"
-    top_flow.add{type="sprite", sprite=UpgradeSystem.artifact_sprite, name="money_sprite", caption=upgrade_system.money, tooltip = "Alien Artifacts"}
+    top_flow.add{type="sprite", sprite=UpgradeSystem.artifact_sprite, name="money_sprite", caption=upgrade_system.money, tooltip = UpgradeSystem.artifact_tooltip}
 
     local scroll = frame.add{type = "scroll-pane", name = "upgrade_scroll"}
-    scroll.style.maximal_height = 450
-    local upgrade_table = scroll.add{type = "table", name = "upgrade_table", column_count = 3}
+    scroll.style.maximal_height = 440
+    scroll.add{type = "table", name = "upgrade_table", column_count = 3}
     --upgrade_table.draw_horizontal_lines = true
     -- upgrade_table.style.horizontal_spacing = 0
     -- upgrade_table.style.vertical_spacing = 0
@@ -192,11 +193,14 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
         end
         
         if not error then
+
+            -- Inform player
             upgrade_system.force.play_sound{path="utility/research_completed", }        
-            upgrade_system.force.print("Unlocked: " .. formatted_upgrade_name(upgrade))
+            upgrade_system.force.print("Purchased: " .. formatted_upgrade_name(upgrade))
+
             for _, player in pairs(upgrade_system.force.players) do
                 if player.character then
-                    player.surface.create_entity{name = "flying-text", position = player.position, text = "Unlocked: " .. formatted_upgrade_name(upgrade)}
+                    player.surface.create_entity{name = "flying-text", position = player.position, text = "Purchased: " .. formatted_upgrade_name(upgrade), color={r=0.2, g=1, b=0.3}}
                 end
             end
             
@@ -204,17 +208,24 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
             for _, upgr in pairs(upgrade_system.available_upgrades) do
                 if upgr.disabled and upgr.prerequisites then
                     for i, prereq in pairs(upgr.prerequisites) do
-                        upgr.prerequisites[i] = nil
-                        if not next(upgr.prerequisites) then
-                            upgr.disabled = false
-                            UpgradeSystem.add_upgrade_to_ui(upgr, player)
+                        if prereq == upgrade.name then
+                            upgr.prerequisites[i] = nil
+                            if not next(upgr.prerequisites) then
+                                upgr.disabled = false
+                                for _, player in pairs(upgrade_system.force.players) do
+                                    UpgradeSystem.add_upgrade_to_ui(upgr, player)
+                                end
+                            end
                         end
                     end
                 end
             end
 
+            -- Take money
             UpgradeSystem.give_money(upgrade_system.force, -upgrade.cost)
+
             if level >= level_max then
+                -- Remove upgrade
                 upgrade_system.available_upgrades[upgrade_key] = nil
                 for _, player in pairs(upgrade_system.force.players) do
                     local frame = UpgradeSystem.get_ui(player)
@@ -224,14 +235,21 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
                     table["upgrade_name_" .. upgrade.name].destroy()
                 end
             else
+                -- Set level
+                upgrade.level = level + 1
+
                 -- Update cost
-                -- Can be linear, double, constant
                 if upgrade.cost_increase == "linear" or not upgrade.cost_increase then
                     upgrade.cost = upgrade.cost + 1
                 elseif upgrade.cost_increase == "double" or upgrade.cost_increase == "exponential" then
                     upgrade.cost = upgrade.cost * 2
+                elseif upgrade.cost_increase == "constant" then --luacheck: ignore
+                    -- Pass
+                else
+                    game.print("Unrecognized cost increase value. This may constitute a bug.")
                 end
-                upgrade.level = level + 1
+
+                -- Update UI
                 for _, player in pairs(upgrade_system.force.players) do
                     local frame = UpgradeSystem.get_ui(player)
                     local table = frame.upgrade_scroll.upgrade_table
@@ -239,7 +257,10 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
                     table["upgrade_name_" .. upgrade.name].caption = formatted_upgrade_name(upgrade) .. "  [?]"
                 end
             end
+
             return true
+
+
         elseif type(error) == "string" then 
             buying_player.print("Purchase failed: " .. error)
             buying_player.play_sound{path="utility/cannot_build", }            

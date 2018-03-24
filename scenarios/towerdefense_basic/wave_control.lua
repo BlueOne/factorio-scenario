@@ -1,6 +1,7 @@
 local Math = require("Utils.Maths")
 
 local mod_gui = require("mod-gui")
+local Table = require("Utils.Table")
 local GuiUtils = require("Utils.Gui")
 local GuiEvent = require("stdlib.event.gui")
 local Event = require("stdlib.event.event")
@@ -11,15 +12,21 @@ require("util")
 
 local WaveCtrl = {}
 
-WaveCtrl.on_wave_starting = script.generate_event_name()
--- {now_active_wave_index, waves_ended}
+global.wave_controls_all = global.wave_controls_all or {}
 
+
+
+
+-- Custom Events
+
+WaveCtrl.on_wave_starting = script.generate_event_name()
+-- {wave_index, waves_ended}
 WaveCtrl.on_wave_destroyed = script.generate_event_name()
 -- {wave_index, game_ended,  wave_control}
 
 
-global.wave_controls_all = global.wave_controls_all or {}
 
+-- Utilities
 
 function WaveCtrl.wave_decode(unit_string, factor)
     local units = {}
@@ -53,29 +60,125 @@ end
 
 
 
+
+
+-- UI
+------------------------------------------------------------------------------
+
+
+
+local function update_wave_icons(wave_control, element)
+    if not wave_control then return end
+    element.clear()
+    if wave_control.spawning_wave_index >= 1 then
+        local wave
+        if wave_control.wave_active then
+            wave = wave_control.waves[wave_control.active_wave_index]
+        else
+            wave = wave_control.waves[wave_control.spawning_wave_index]
+        end
+        if wave then
+            element.style.visible = true
+            for entity_name, count in pairs(wave.unit_counts) do
+                if entity_name ~= "total" then
+                    for i = 1, math.ceil(count / 50) do
+                        element.add{type="sprite", name="wave_sprite_" .. entity_name .. i, sprite = "entity/" .. entity_name, tooltip={"entity-name." .. entity_name}}
+                    end
+                end
+            end
+        end
+    end
+end
+
+ function WaveCtrl.create_ui(player, wave_control)
+    local mod_flow = mod_gui.get_frame_flow(player)
+    if mod_flow.wave_frame and mod_flow.wave_frame.valid then
+        WaveCtrl.destroy_ui(player)
+    end
+
+    local frame = mod_flow.add{type="frame", direction="vertical", name="wave_frame", caption="Wave starting soon."}
+
+    -- Icons for next or current wave units
+    local flow = frame.add{type="flow", name="wave_display_flow", direction="horizontal"}
+    update_wave_icons(wave_control, flow)
+
+    GuiUtils.make_hide_button(player, frame, true, "entity/medium-biter")
+    wave_control.players_with_ui[player.index] = true
+end
+
+function WaveCtrl.update_ui(player, wave_control)
+    local mod_flow = mod_gui.get_frame_flow(player)
+    if not mod_flow.wave_frame or not mod_flow.wave_frame.valid then
+        return
+    end
+
+    if wave_control.spawning_wave_index < 1 then return end
+    local total_wave_count = #wave_control.waves
+    if wave_control.active_wave_index < total_wave_count or wave_control.wave_active then
+        if wave_control.wave_active then
+            mod_flow.wave_frame.caption = "Wave " .. wave_control.active_wave_index .. " active!"
+        else
+            mod_flow.wave_frame.caption = "Wave " .. wave_control.spawning_wave_index .. " / " .. total_wave_count .. " in " .. Math.prettytime(wave_control.next_wave_tick - game.tick, true)
+        end
+    else
+        mod_flow.wave_frame.caption = "Waves Ended"
+    end
+end
+
+function WaveCtrl.destroy_ui(player)
+    local mod_flow = mod_gui.get_frame_flow(player)
+    if mod_flow.wave_frame and mod_flow.wave_frame.valid then
+        mod_flow.wave_frame.destroy()
+    end
+
+    for _, wave_control in pairs(global.wave_controls_all) do
+        wave_control.players_with_ui[player.index] = nil
+    end
+end
+
+
+
+
+-- Core Logic
+------------------------------------------------------------------------------
+
+
 local function move_next_group(wave_control)
     local active_wave = wave_control.waves[wave_control.active_wave_index]
     if not active_wave then
         return
     end
 
-    local continue_moving = false
-    for lane_name, lane in pairs(active_wave.lanes) do
-        local group = active_wave.groups[lane_name][active_wave.waiting_group_index[lane_name]]
-        if group then
-            continue_moving = true
-            group.group_object.set_command(table.deepcopy(lane.move_cmd))
-            -- Free waiting area
-            wave_control.buffers[lane_name][group.buffer_key].occupied = false
-        end
-        active_wave.waiting_group_index[lane_name] = active_wave.waiting_group_index[lane_name] + 1
-    end
+    -- TODO Finish
+    local next_tick
+    for _, lane in pairs(active_wave.lanes) do
+        if game.tick > lane.next_active_tick then
+            -- Pick group
+            local group = lane.groups[lane.waiting_group_index]
 
-    if continue_moving then
-        return active_wave.group_size * active_wave.group_time_factor
-    else 
-        return 
+            if group then
+                group.group_object.set_command(table.deepcopy(lane.move_cmd))
+                -- Free waiting area
+                lane.buffers[group.buffer_key].occupied = false
+            end
+
+            lane.waiting_group_index = lane.waiting_group_index + 1
+            local next_group = lane.groups[lane.waiting_group_index]
+            if next_group then
+                lane.next_active_tick = active_wave.group_size * active_wave.group_time_factor + (lane.buffers.max_dist - Math.distance(lane.path[2], next_group.buffer_position)) / 5 - 5
+            else
+                lane.next_active_tick = nil
+            end
+            -- local next_group = lane.groups[ind]
+            lane.next_active_tick = active_wave.group_size * active_wave.group_time_factor + (lane.buffers.max_dist - lane.buffers[group.buffer_key]) / 5
+
+        end
+
+        if not next_tick or lane.next_active_tick < next_tick then
+            next_tick = lane.next_active_tick
+        end
     end
+    return next_tick
 end
 
 
@@ -86,15 +189,8 @@ local function spawn_next_unit(wave_control, time_left)
         return nil
     end
 
-    -- Pick Lane
-    -- (TODO): This should not be generated each time.
-    local lane_weights = {}
-    for k, l in pairs(spawning_wave.lanes) do
-        if not l.disabled then
-            lane_weights[k] = l.weight
-        end
-    end
-    local lane_name = Math.roulette_choice(lane_weights)
+    -- Randomly pick Wave
+    local lane_name = Math.roulette_choice(spawning_wave.weights)
     local lane = spawning_wave.lanes[lane_name]
 
     -- Pick Unit Type
@@ -112,14 +208,14 @@ local function spawn_next_unit(wave_control, time_left)
     wave_control.wave_units_by_index[index][unit.unit_number] = true
 
     -- Assign group
-    local groups = spawning_wave.groups[lane_name]
+    local groups = lane.groups
     local group
     if groups[#groups] then group = groups[#groups].group_object end
     if not group or #group.members >= spawning_wave.group_size then
         -- Select waiting area
         local free_buffer_weights = {}
         local have_buffer = false
-        for k, b in pairs(wave_control.buffers[lane_name]) do
+        for k, b in pairs(lane.buffers) do
             if not b.occupied then
                 free_buffer_weights[k] = b.weight
                 have_buffer = true
@@ -129,9 +225,10 @@ local function spawn_next_unit(wave_control, time_left)
             error("No free waiting area! Wave " .. index .. ", Lane " .. lane_name)
         end
         local buffer_key = Math.roulette_choice(free_buffer_weights)
-        local buffer = wave_control.buffers[lane_name][buffer_key]
+        local buffer = lane.buffers[buffer_key]
         buffer.occupied = true
 
+        -- Create group
         group = wave_control.surface.create_unit_group{position=buffer.position, force=wave_control.wave_force}
         table.insert(groups, {group_object = group, lane_name = lane_name, buffer_key = buffer_key})
         -- local command = {
@@ -157,30 +254,57 @@ function WaveCtrl.next_wave(wave_control)
     if wave_control.active_wave_index >= #wave_control.waves then 
         return 
     end
+
+    -- Update wave indices
     wave_control.active_wave_index = wave_control.spawning_wave_index
     wave_control.spawning_wave_index = wave_control.spawning_wave_index + 1
-    if wave_control.active_wave_index == 0 then
-        wave_control.next_wave_tick = game.tick + wave_control.initial_wait
-        wave_control.next_unit_tick = 1
-        return
-    end
 
-    local active_wave = wave_control.waves[wave_control.active_wave_index]
+    -- Update Player UI
+    for player_index, has_ui in pairs(wave_control.players_with_ui) do
+        local player = game.players[player_index]
+        if has_ui then 
+            local mod_flow = mod_gui.get_frame_flow(player)            
+            update_wave_icons(wave_control, mod_flow.wave_frame.wave_display_flow)
+        end
+    end
     
-    -- Restart spawning and moving units
+    local active_wave = wave_control.waves[wave_control.active_wave_index]
     local waves_ended = active_wave == nil
-    if not waves_ended then
-        wave_control.next_group_tick = 1
-        wave_control.next_unit_tick = 1
-        wave_control.next_wave_tick = game.tick + active_wave.duration
-    end
-
+    
+    -- Raise event
     local event = {
         wave_index = wave_control.active_wave_index,
         waves_ended = waves_ended
     }
     script.raise_event(WaveCtrl.on_wave_starting, event)
+
+    
+    -- If this is the first wave, only start spawning
+    if wave_control.active_wave_index == 0 then
+        wave_control.next_wave_tick = game.tick + wave_control.initial_wait
+        wave_control.next_unit_tick = 1
+    else
+        -- Restart spawning and moving units
+        wave_control.wave_active = true
+        
+        if not waves_ended then
+            wave_control.next_group_tick = 1
+            wave_control.next_unit_tick = 1
+            wave_control.next_wave_tick = game.tick + active_wave.duration
+        end
+
+        -- Sort list of spawned groups by distance to first waypoint
+        for _, lane in pairs(active_wave.lanes) do
+            table.sort(
+                lane.groups, 
+                function(a, b) 
+                    return Math.sqdistance(a.buffer_position, lane.path[2]) < Math.sqdistance(b.buffer_position, lane.path[2]) 
+                end
+            )
+        end
+    end
 end
+
 
 
 function WaveCtrl.main(wave_control)
@@ -221,50 +345,6 @@ function WaveCtrl.main(wave_control)
 end
 
 
- function WaveCtrl.create_ui(player)
-    local mod_flow = mod_gui.get_frame_flow(player)
-    if mod_flow.wave_frame and mod_flow.wave_frame.valid then
-        WaveCtrl.destroy_ui(player)
-    end
-
-    local frame = mod_flow.add{type="frame", direction="vertical", name="wave_frame", caption="Waves"}
-    local label = frame.add{type="label", caption="Wave Starting soon.", name="time_label"}
-
-    GuiUtils.make_hide_button(player, frame, true, "entity/medium-biter")    
-end
-
-function WaveCtrl.update_ui(player, wave_control)
-    local mod_flow = mod_gui.get_frame_flow(player)
-    if not mod_flow.wave_frame or not mod_flow.wave_frame.valid then
-        return
-    end
-
-    if wave_control.spawning_wave_index < 1 then return end
-    if wave_control.spawning_wave_index == 1 then
-        mod_flow.wave_frame.caption = "Waves"
-        mod_flow.wave_frame.time_label.caption = "Waves start in " .. Math.prettytime(wave_control.next_wave_tick - game.tick, true)
-    elseif wave_control.active_wave_index < #wave_control.waves and wave_control.next_wave_tick then
-        mod_flow.wave_frame.caption = "Wave " .. wave_control.active_wave_index
-        mod_flow.wave_frame.time_label.caption = "Next wave in " .. Math.prettytime(wave_control.next_wave_tick - game.tick, true)
-    elseif wave_control.active_wave_index == #wave_control.waves then
-        mod_flow.wave_frame.caption = "Last Wave"
-        local label = mod_flow.wave_frame.time_label
-        if label and label.valid then label.destroy() end
-    else
-        mod_flow.wave_frame.caption = "Waves Ended"
-        local label = mod_flow.wave_frame.time_label
-        if label and label.valid then label.destroy() end
-    end
-end
-
-function WaveCtrl.destroy_ui(player)
-    local mod_flow = mod_gui.get_frame_flow(player)
-    if mod_flow.wave_frame and mod_flow.wave_frame.valid then
-        mod_flow.wave_frame.destroy()
-    end
-end
-
-
 
 Event.register(defines.events.on_entity_died, function(event)
     local ent = event.entity
@@ -275,11 +355,23 @@ Event.register(defines.events.on_entity_died, function(event)
                     if wave[ent.unit_number] then
                         wave[ent.unit_number] = nil
 
-                        -- Wave ended?
+                        -- Wave ended
                         if next(wave) == nil then
+                            wave_control.wave_active = false
+
+                            -- Update Player UI
+                            for player_index, has_ui in pairs(wave_control.players_with_ui) do
+                                local player = game.players[player_index]
+                                if has_ui then 
+                                    local mod_flow = mod_gui.get_frame_flow(player)            
+                                    update_wave_icons(wave_control, mod_flow.wave_frame.wave_display_flow)
+                                end
+                            end
+
                             wave_control.wave_units_by_index[wave_ind] = nil
                             local game_ended = (wave_ind == #wave_control.waves)
                             if game_ended then WaveCtrl.next_wave(wave_control) end
+
                             local raised_event = {wave_index = wave_ind, game_ended = game_ended,  wave_control = wave_control}
                             script.raise_event(WaveCtrl.on_wave_destroyed, raised_event)
                             break
@@ -290,6 +382,19 @@ Event.register(defines.events.on_entity_died, function(event)
         end
     end
 end)
+
+
+
+
+
+-- More External Controls
+------------------------------------------------------------------------------
+
+function WaveCtrl.delay_wave(wave_control, time)
+    wave_control.next_wave_tick = wave_control.next_wave_tick + time
+end
+
+
 
 -- Example for wave:
 -- wave = {
@@ -303,20 +408,15 @@ end)
 --     duration = 60*60*1.5
 -- }
 
-
-function WaveCtrl.delay_wave(wave_control, time)
-    wave_control.next_wave_tick = wave_control.next_wave_tick + time
-end
-
 function WaveCtrl.make_wave(wave_control, wave)
     wave.finished_spawning = false
     wave.group_size = wave.group_size or 15
     wave.group_time_factor = wave.group_time_factor or 20
-    wave.waiting_group_index = {}
-    wave.groups = {}
-    for lane_name, lane in pairs(wave.lanes) do
-        wave.waiting_group_index[lane_name] = 1
-        wave.groups[lane_name] = {}
+    for _, lane in pairs(wave.lanes) do
+        lane.waiting_group_index = 1
+        lane.groups = {}
+
+        -- Make Unit Move Command for this lane
         if not lane.move_cmd then
             lane.move_cmd = {
                 type = defines.command.compound,
@@ -324,15 +424,7 @@ function WaveCtrl.make_wave(wave_control, wave)
                 distraction = defines.distraction.none,
                 commands = {},
             }
-            -- for i=2, #lane.path do
-            --     local pos = lane.path[i]
-            --     table.insert(lane.move_cmd.commands, {
-            --         type = defines.command.attack_area,
-            --         destination = pos,
-            --         distraction = defines.distraction.none,
-            --         radius = 20,
-            --     })
-            -- end
+
             for i=2, #lane.path-1 do
                 local pos = lane.path[i]
                 table.insert(lane.move_cmd.commands, {
@@ -359,21 +451,32 @@ function WaveCtrl.make_wave(wave_control, wave)
         end
         wave.to_spawn.total = total
     end
+    wave.unit_counts = Table.deepcopy(wave.to_spawn)
 
     -- Gather buffer positions per lane.
     for lane_name, lane in pairs(wave.lanes) do
-        if not wave_control.buffers[lane_name] then
-            wave_control.buffers[lane_name] = {}
-            if not lane.buffers then error("Lane " .. lane_name .. " is missing waiting areas!") end
-            for _, buffer in pairs(lane.buffers) do
-                table.insert(wave_control.buffers[lane_name], {
-                    position = buffer,
-                    occupied = false,
-                    weight = Math.sqdistance(lane.path[1], buffer),
-                })
-            end
+        local buffers = {}
+            
+        if not lane.buffers then error("Lane " .. lane_name .. " is missing waiting areas!") end
+        for _, buffer in pairs(lane.buffers) do
+            table.insert(lane.buffers, {
+                position = buffer,
+                occupied = false,
+                weight = Math.sqdistance(lane.path[1], buffer),
+                distance = Math.distance(lane.path[2], buffer),
+            })
         end
+        table.sort(buffers, function(a, b) return a.distance < b.distance end)
+        lane.buffers = buffers
     end
+
+    -- Gather lane weights for randomized lane choosing later
+    local lane_weights = {}
+    for k, lane in pairs(wave.lanes) do
+        lane_weights[k] = lane.weight
+    end
+    wave.weights = lane_weights
+
 
     table.insert(wave_control.waves, wave)
 end
@@ -394,7 +497,8 @@ function WaveCtrl.init(params)
         active_wave_index = -1,
         waves = {},
         buffers = {},
-        wave_units_by_index = {}
+        wave_units_by_index = {},
+        players_with_ui = {}
     }
 
     local i = 1 
@@ -439,16 +543,20 @@ return WaveCtrl
 
 
 
+
+
 -- Wave control data overview
 
 --     wave_control = {
---         ended = false 
+--         ended = false,
+--         wave_active = false,
 --         next_wave_tick = 60*60, 
 --         next_unit_tick = 0,
 --         next_group_tick = 0,
 --         spawning_wave_index = 0, -- Points to wave that is moved to waiting position currently
 --         active_wave_index = 0, -- Points to wave that is walking on lanes currently
 --         wave_force = "enemy",
+--         players_with_ui = {1=true, 2=false, ...} 
 --         surface = game.surfaces.nauvis,
 --         buffers = {
 --             lane_name = {
@@ -457,25 +565,28 @@ return WaveCtrl
 --         },
 --         waves = {
 --             [1] = {
+--                 finished_spawning = false,
 --                 lanes = {
---                     lane1 = {
---                         weight = 1,
---                         path = {pos1, pos2, posn},
---                         disabled = false,
---                         buffers = {posa, posb, ...},
+--                     ["lane1"] = {
+--                         weight = 1, 
+--                         path = {pos1, pos2, ...},
+--                         buffers = {buffer1, buffer2},
+--                         groups = { {group_obj = ..., buffer_position = ..., lane_name = ... } },
+--                         max_buffer_dist = ...,
+--                         waiting_group_index = 1,
+--                         move_cmd = {},
+--                         next_active_tick = ...,
 --                     }
 --                 },
---                 finished_spawning = false,
 --                 group_size = 15,
 --                 group_time_factor = 20, -- Time interval between sending groups is calculated as group size times this.
---                 groups = {lane1 = { {group_object = ..., buffer_position = ..., lane_name = ...}}, lane2 = {} },
---                 waiting_group_index = {lane1=1, lane2=1},
 --                 to_spawn = {
 --                     ["big-biter"] = 5,
 --                     ["big-spitter"] = 5,
 --                     total = 10,
 --                 },
---                 duration = 60*60*1.5
+--                 unit_counts = {} -- copy of to_spawn that doesnt get modified during the game
+--                 duration = 60*60*1.5,
 --             },
 --         },-
 --         wave_units_by_index = { -- Lists unit numbers for all units of all waves.

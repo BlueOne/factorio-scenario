@@ -23,30 +23,31 @@ local TableGUI = require("Utils.TableViewer")
 -- TODO
 -------------------------------------------------------------------------------
 
--- Balance Testing
--- Player Name
--- UI for waves
 -- Determine Wave Group movement ticks in advance so they are timed evenly
 -- License
+-- Testing
 
 -- Testing round 2
 
 -- Voting UI
--- difficulty ui
+-- Difficulty ui
 -- Difficulties
 
--- outside game system
+-- Outside game system
 -- Reset surface
 
+-- Sort upgrade ui.
+-- Table UI is buggy again.
 
 -- Multiplayer Debugging
--- Did I say debugging? 
+-- Player Name
 
 -- Low Priority:
--- Performance optimizations for reset surface
+-- reset surface
 -- Rocket silo death animation nuke?
--- Gfx effects for upgrade purchase - at player and affected entity.
+-- Gfx effects for upgrade purchase at affected entity.
 -- (Edit forces of entities and active/inactive)
+-- Observers
 
 
 -- Done: 
@@ -82,22 +83,20 @@ for _, p in pairs(buffers) do
 end
 
 local scenario_constants = {
-    spawner_money = 2,
-    wave_money = 4,
-    initial_money = 10,
+    spawner_money = 4,
+    wave_money = 8,
+    initial_money = 100,
     player_spawn_position = {105, -75},
     artillery_initial_ammo = 3,
     initial_wait = 12 * 60 * 60,
     lane1 = {
         weight = 1,
         path = {{201, 66}, {168, 44}, {121, 0}, {121, -50}, {162.5, -72}},
-        disabled = false,
         buffers = buffers_1
     },
     lane2 = {
         weight = 0.5, 
         path = {{213, 71}, {208, 29}, {209, -63}, {197, -75}, {147, -75}, {162.5, -72}},
-        disabled = false,
         buffers = buffers_2
     },
     blocking_turrets = {
@@ -109,6 +108,8 @@ local scenario_constants = {
         --["submachine-gun"] = 1,
         --["firearm-magazine"] = 20,
         ["artillery-targeting-remote"] = 1,
+        ["blueprint"] = 2,
+        ["deconstruction-planner"] = 1,
         -- ["modular-armor"] = {
         --     type="armor",
         --     equipment = {
@@ -171,9 +172,9 @@ local scenario_constants = {
         "circuit-network",
         "optics",
         "military-2",
-        "railway",
-        "automated-rail-transportation",
-        "rail-signals",
+        -- "railway",
+        -- "automated-rail-transportation",
+        -- "rail-signals",
         "toolbelt",
         "electric-energy-distribution-1",
         "advanced-material-processing",
@@ -215,24 +216,24 @@ local scenario_constants = {
 
 
     upgrades = {
-        {
-            name = "Repair",
-            description = "Repair the silo by 500 Health.";
-            cost = 1,
-            level_max = 50,
-            icon = "item/repair-pack",
-            action = function(game_control, upgrade_data)
-                if not game_control.rocket_silo or not game_control.rocket_silo.valid then
-                    return "The Rocket Silo seems to be unavailable."
-                end
+        -- {
+        --     name = "Repair",
+        --     description = "Repair the silo by 1000 Health.";
+        --     cost = 1,
+        --     level_max = 50,
+        --     icon = "item/repair-pack",
+        --     action = function(game_control, upgrade_data)
+        --         if not game_control.rocket_silo or not game_control.rocket_silo.valid then
+        --             return "The Rocket Silo seems to be unavailable."
+        --         end
 
-                if game_control.rocket_silo.health > 4500 then 
-                    return "Rocket silo is missing less 500 health!"
-                else
-                    game_control.rocket_silo.health = game_control.rocket_silo.health + 500
-                end
-            end
-        },
+        --         if game_control.rocket_silo.health > 4000 then 
+        --             return "Rocket silo is missing less 1000 health!"
+        --         else
+        --             game_control.rocket_silo.health = game_control.rocket_silo.health + 1000
+        --         end
+        --     end
+        -- },
         {
             name = "Artillery Shell",
             description = "Add an artillery shell to the artillery turret.",
@@ -264,7 +265,7 @@ local scenario_constants = {
         {
             name = "Turret Upgrade",
             description = "Upgrades turret damage.",
-            cost = 3,
+            cost = 2,
             icon = "item/gun-turret",
             unlock = "gun-turret-damage",
             level_max = 5,
@@ -272,7 +273,7 @@ local scenario_constants = {
         {
             name = "Laser Turret Upgrade",
             description = "Upgrades laser turret damage and shooting speed.",
-            cost = 3,
+            cost = 2,
             icon = "item/laser-turret",
             unlock = {
                 "laser-turret-damage",
@@ -281,9 +282,9 @@ local scenario_constants = {
             level_max = 5,
         },
         {
-            name = "Flame Thrower Upgrade",
-            description = "Upgrades laser turret damage and shooting speed.",
-            cost = 3,
+            name = "Flamethrower Upgrade",
+            description = "Upgrades flamethrower damage.",
+            cost = 2,
             icon = "item/flamethrower-turret",
             unlock = {
                 "flamethrower-damage",
@@ -297,21 +298,21 @@ local scenario_constants = {
             icon = "item/rocket",
             unlock = {
                 "rocket-damage",
-                "rocket-shooting-speed",
+                "rocket-speed",
             },
             level_max = 5,
-            prerequisites = {"Rocket Turret"},
+            prerequisites = {"Rocket Technology"},
         },
         {
             name = "Rocket Turret Damage",
             description = "Upgrades rocket turret damage.",
-            cost = 3,
+            cost = 2,
             icon = "item/rocket-turret",
             unlock = {
                 "rocket-turret-damage",
             },
             level_max = 5,
-            prerequisites = {"Rocket Turret"},
+            prerequisites = {"Rocket Technology"},
         },
         -- {
         --     name = "Shotgun Shell Upgrade",
@@ -327,7 +328,7 @@ local scenario_constants = {
         {
             name = "Rocket Technology",
             description = "Unlocks rockets and the rocket turret.",
-            cost = 20,
+            cost = 12,
             icon = "item/rocket",
             unlock = {
                 "explosives",
@@ -339,7 +340,7 @@ local scenario_constants = {
         {
             name = "Nuclear Technology",
             description = "Unlocks uranium ammo and nuclear bombs (by the way, there is no friendly fire in this mode).",
-            cost = 10,
+            cost = 12,
             icon = "item/uranium-rounds-magazine",
             unlock = {
                 "nuclear-power",
@@ -350,7 +351,7 @@ local scenario_constants = {
         {
             name = "Robot Speed",
             description = "Increases worker robot speed by 50%.",
-            cost = 10,
+            cost = 8,
             icon = "item/construction-robot",
             unlock = {
                 "worker-robots-speed-3",
@@ -360,7 +361,7 @@ local scenario_constants = {
         {
             name = "Faster Hands",
             description = "Increases handcrafting speed and mining speed by 150%",
-            cost = 10,
+            cost = 8,
             icon = "item/iron-axe",
             action = function(game_control, upgrade_data)
                 game_control.player_force.manual_crafting_speed_modifier = game_control.player_force.manual_crafting_speed_modifier + 1.5
@@ -369,18 +370,18 @@ local scenario_constants = {
         },
         {
             name = "Faster Movement",
-            description = "Increases running speed by 50% of vanilla speed.",
-            cost = 10,
+            description = "Increases running speed by 80% of vanilla speed.",
+            cost = 8,
             icon = "item/exoskeleton-equipment",
             max_level = 2,
             action = function(game_control, upgrade_data)
-                game_control.player_force.character_running_speed_modifier = game_control.player_force.character_running_speed_modifier + 0.5
+                game_control.player_force.character_running_speed_modifier = game_control.player_force.character_running_speed_modifier + 0.8
             end
         },
         {
             name = "Time",
             description = "Delay next wave by 5 minutes.",
-            cost = 5,
+            cost = 8,
             icon = "item/lab",
             max_level = 2,
             cost_increase = "double",
@@ -455,12 +456,12 @@ local scenario_constants = {
 }
 
 scenario_constants.hints = {
-    "Biter waves will come to attack your rocket silo. You win if you survive all waves. You lose if you silo falls. The silo starts at 500 health out of 5000 but you can repair it if you need to.",
+    "Biter will come in waves to attack your rocket silo. You win if you survive all waves. You lose if you silo falls. ",
     "At the start of each wave your team will receive " .. scenario_constants.wave_money .. " alien artifacts. These can be used to purchase upgrades.",
-    "The purchasable upgrades often correspond to technologies, for example Bullet Upgrade 1 unlocks the Bullet Damage 1 and Bullet Shooting Speed 1 technologies.",
-    "The aliens on the left half of the map are peaceful, but their spawners drop " .. scenario_constants.spawner_money .. " alien artifacts each.",
+    "Some purchasable upgrades correspond to technologies, for example Bullet Upgrade 1 unlocks the Bullet Damage 1 and Bullet Shooting Speed 1 technologies.",
+    "The aliens in the south west are peaceful. Their spawners drop " .. scenario_constants.spawner_money .. " alien artifacts each.",
     "Your team has an artillery turret which you can use to kill biters in an emergency. There is no friendly fire: You cannot hurt allied buildings. ",
-    "You will not be able to beat big biters using basic firearm magazines only.",
+    "You will not be able to beat big biters and behemoths using basic firearm magazines only.",
     "The east lane only gets half the attacks of the west lane. Apparently biters dont like to go near water.",
     "Credits: This scenario uses \n - factorio stdlib. \n - predictabowl's rocket turret. ",
 }
@@ -481,8 +482,8 @@ local function make_wave(unit_str, duration, size)
         lanes = {global.game_control.lane1, global.game_control.lane2},
         group_size = size or 15,
         group_time_factor = 15,
-        unit = {unit_str, (factor or 20)},
-        duration = duration
+        unit = {unit_str, 30},
+        duration = duration,
     }
 
     WaveCtrl.make_wave(global.game_control.wave_control, wave)
@@ -598,7 +599,7 @@ local function player_enter_game(game_control, player)
         player.minimap_enabled = true
 
         UpgradeSystem.create_ui(player)
-        WaveCtrl.create_ui(player)
+        WaveCtrl.create_ui(player, game_control.wave_control)
 
     end
 end
@@ -810,7 +811,7 @@ end
 Event.register(defines.events.on_entity_died, function(event)
     local entity = event.entity
     local game_control = global.game_control
-    if not game_control then return end
+    if not game_control or game_control.ended then return end
 
     -- Game End
     if entity.name == "rocket-silo" then 
@@ -845,7 +846,7 @@ end)
 Event.register(defines.events.on_put_item, function(event)
     local player = game.players[event.player_index]
     local game_control = global.game_control
-    if not game_control then return end
+    if not game_control or game_control.ended then return end
     if not game_control.lane_marker_surface then return end
     if game_control.lane_marker_surface.get_tile(event.position.x, event.position.y).name == "out-of-map" then
         local success = player.clean_cursor()
@@ -869,7 +870,7 @@ Event.register(defines.events.on_built_entity, function(event)
     local player = game.players[event.player_index]    
     local position = entity.position
     local game_control = global.game_control
-    if not game_control then return end
+    if not game_control or game_control.ended then return end
     if not game_control.lane_marker_surface then return end
     if game_control.lane_marker_surface.get_tile(position.x, position.y).name == "out-of-map" and not entity.has_flag("not-on-map") then
         if game.item_prototypes[entity.name] then
@@ -885,12 +886,12 @@ end)
 Event.register(WaveCtrl.on_wave_starting, function(event)
     local game_control = global.game_control
     if event.wave_index > 0 then
-        game_control.player_force.play_sound{path="utility/message", }        
+        game_control.player_force.play_sound{path="utility/new_objective", }        
         game.print("Wave " .. event.wave_index .. " has started.")
     else
-        game_control.player_force.play_sound{path="utility/message", }                
+        game_control.player_force.play_sound{path="utility/new_objective", }                
         game.print("First wave starting soon!")
-        UpgradeSystem.give_money(global.game_control.player_force, scenario_constants.initial_money, game_control.surface, game_control.rocket_silo)
+        UpgradeSystem.give_money(global.game_control.player_force, scenario_constants.initial_money, game_control.surface, {game_control.rocket_silo.position})
     end
 
 end)
@@ -899,7 +900,7 @@ end)
 -- Alert players to attacks on silo.
 script.on_nth_tick(5*60, function()
     local game_control = global.game_control
-    if game_control then
+    if game_control and not game_control.ended then
         if game_control.rocket_silo_health and game_control.rocket_silo_health > game_control.rocket_silo.health then
             game_control.player_force.play_sound{path="utility/scenario_message"}
         end
