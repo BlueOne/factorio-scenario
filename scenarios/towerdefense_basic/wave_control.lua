@@ -149,36 +149,54 @@ local function move_next_group(wave_control)
         return
     end
 
-    -- TODO Finish
     local next_tick
+    local sent_something = false
     for _, lane in pairs(active_wave.lanes) do
-        if game.tick > lane.next_active_tick then
+        if lane.next_active_tick and game.tick > lane.next_active_tick then
             -- Pick group
             local group = lane.groups[lane.waiting_group_index]
 
             if group then
-                group.group_object.set_command(table.deepcopy(lane.move_cmd))
+                if group.group_object and group.group_object.valid then 
+                    group.group_object.set_command(table.deepcopy(lane.move_cmd))
+                end
                 -- Free waiting area
                 lane.buffers[group.buffer_key].occupied = false
+                sent_something = true
             end
 
             lane.waiting_group_index = lane.waiting_group_index + 1
             local next_group = lane.groups[lane.waiting_group_index]
             if next_group then
-                lane.next_active_tick = active_wave.group_size * active_wave.group_time_factor + (lane.buffers.max_dist - Math.distance(lane.path[2], next_group.buffer_position)) / 5 - 5
+                lane.next_active_tick = active_wave.group_size * active_wave.group_time_factor -- + (lane.maximum_buffer_distance - Math.distance(lane.path[2], next_group.buffer_position)) / 5 - 5
             else
                 lane.next_active_tick = nil
             end
-            -- local next_group = lane.groups[ind]
-            lane.next_active_tick = active_wave.group_size * active_wave.group_time_factor + (lane.buffers.max_dist - lane.buffers[group.buffer_key]) / 5
-
         end
 
-        if not next_tick or lane.next_active_tick < next_tick then
+        if lane.next_active_tick and (not next_tick or lane.next_active_tick < next_tick) then
             next_tick = lane.next_active_tick
         end
     end
-    return next_tick
+
+    -- Biters sometimes get stuck in starting area, as a band-aid we kill off all wave units that are still in the starting area after 20 seconds.
+    if not sent_something and not next_tick then
+        for _, ent in pairs(wave_control.surface.find_entities_filtered{type="unit", force=wave_control.wave_force.name}) do
+            local number = ent.unit_number
+            for wave_ind, wave in pairs(wave_control.waves) do
+                if wave.units_by_number and wave.units_by_number[number] then
+                    if wave_ind < wave_control.active_wave_index then 
+                        ent.die()
+                    elseif wave_ind == wave_control.active_wave_index and (not ent.has_command() or Math.distance(ent.position, wave.lanes[1].path[1]) < wave.lanes[1].maximum_buffer_distance + 10) then 
+                        ent.die()
+                    end
+                    break
+                end
+            end
+        end
+    end
+    
+    return next_tick or 40*60
 end
 
 
@@ -189,28 +207,30 @@ local function spawn_next_unit(wave_control, time_left)
         return nil
     end
 
+
     -- Randomly pick Wave
     local lane_name = Math.roulette_choice(spawning_wave.weights)
     local lane = spawning_wave.lanes[lane_name]
 
     -- Pick Unit Type
-    local total = spawning_wave.to_spawn.total
-    spawning_wave.to_spawn.total = nil
-    local unit_type = Math.roulette_choice(spawning_wave.to_spawn)
-    spawning_wave.to_spawn.total = total
+    local weights = Table.copy(spawning_wave.to_spawn)
+    weights.total = nil
+    local unit_type = Math.roulette_choice(weights)
 
     -- Spawn Unit
     spawning_wave.to_spawn[unit_type] = spawning_wave.to_spawn[unit_type] - 1
     spawning_wave.to_spawn.total = spawning_wave.to_spawn.total - 1
     local position = wave_control.surface.find_non_colliding_position(unit_type, lane.path[1], 10, 1)
     local unit = wave_control.surface.create_entity{name=unit_type, position = position, force=wave_control.wave_force, }
-    wave_control.wave_units_by_index[index] = wave_control.wave_units_by_index[index] or {}
-    wave_control.wave_units_by_index[index][unit.unit_number] = true
+    spawning_wave.units_by_number = spawning_wave.units_by_number or {}
+    spawning_wave.units_by_number[unit.unit_number] = true
 
     -- Assign group
     local groups = lane.groups
     local group
     if groups[#groups] then group = groups[#groups].group_object end
+
+    -- Create new group
     if not group or #group.members >= spawning_wave.group_size then
         -- Select waiting area
         local free_buffer_weights = {}
@@ -230,22 +250,16 @@ local function spawn_next_unit(wave_control, time_left)
 
         -- Create group
         group = wave_control.surface.create_unit_group{position=buffer.position, force=wave_control.wave_force}
-        table.insert(groups, {group_object = group, lane_name = lane_name, buffer_key = buffer_key})
-        -- local command = {
-        --     type = defines.command.wander,
-        --     distraction = defines.distraction.none,
-        -- }
-        -- group.set_command(command)
+        table.insert(groups, {group_object = group, lane_name = lane_name, buffer_key = buffer_key, buffer_position = buffer.position})
     end
     group.add_member(unit)
 
     -- Check if this wave is finished spawning
     if spawning_wave.to_spawn.total <= 0 then
         spawning_wave.finished_spawning = true
-        return
     end
 
-    return math.floor(time_left / spawning_wave.to_spawn.total)
+    return math.max(math.floor(time_left / spawning_wave.to_spawn.total - 5), 0)
 end
 
 
@@ -289,6 +303,9 @@ function WaveCtrl.next_wave(wave_control)
         
         if not waves_ended then
             wave_control.next_group_tick = 1
+            for _, lane in pairs(active_wave.lanes) do
+                lane.next_active_tick = 1
+            end
             wave_control.next_unit_tick = 1
             wave_control.next_wave_tick = game.tick + active_wave.duration
         end
@@ -298,7 +315,7 @@ function WaveCtrl.next_wave(wave_control)
             table.sort(
                 lane.groups, 
                 function(a, b) 
-                    return Math.sqdistance(a.buffer_position, lane.path[2]) < Math.sqdistance(b.buffer_position, lane.path[2]) 
+                    return Math.sqdistance(a.buffer_position, lane.path[2]) > Math.sqdistance(b.buffer_position, lane.path[2]) 
                 end
             )
         end
@@ -351,12 +368,13 @@ Event.register(defines.events.on_entity_died, function(event)
     if ent.type == "unit" then
         for _, wave_control in pairs(global.wave_controls_all) do
             if not wave_control.ended then 
-                for wave_ind, wave in pairs(wave_control.wave_units_by_index) do 
-                    if wave[ent.unit_number] then
-                        wave[ent.unit_number] = nil
+                for wave_ind, wave in pairs(wave_control.waves) do
+                    local units = wave.units_by_number
+                    if units and units[ent.unit_number] then
+                        units[ent.unit_number] = nil
 
                         -- Wave ended
-                        if next(wave) == nil then
+                        if next(units) == nil and wave.to_spawn.total <= 0 then
                             wave_control.wave_active = false
 
                             -- Update Player UI
@@ -368,11 +386,11 @@ Event.register(defines.events.on_entity_died, function(event)
                                 end
                             end
 
-                            wave_control.wave_units_by_index[wave_ind] = nil
+                            wave.units_by_number = nil
                             local game_ended = (wave_ind == #wave_control.waves)
                             if game_ended then WaveCtrl.next_wave(wave_control) end
 
-                            local raised_event = {wave_index = wave_ind, game_ended = game_ended,  wave_control = wave_control}
+                            local raised_event = {wave_index = wave_ind, game_ended = game_ended, wave_control = wave_control}
                             script.raise_event(WaveCtrl.on_wave_destroyed, raised_event)
                             break
                         end
@@ -409,6 +427,7 @@ end
 -- }
 
 function WaveCtrl.make_wave(wave_control, wave)
+    wave = Table.copy(wave)
     wave.finished_spawning = false
     wave.group_size = wave.group_size or 15
     wave.group_time_factor = wave.group_time_factor or 20
@@ -425,7 +444,7 @@ function WaveCtrl.make_wave(wave_control, wave)
                 commands = {},
             }
 
-            for i=2, #lane.path-1 do
+            for i=2, #lane.path do
                 local pos = lane.path[i]
                 table.insert(lane.move_cmd.commands, {
                     type = defines.command.go_to_location,
@@ -458,15 +477,19 @@ function WaveCtrl.make_wave(wave_control, wave)
         local buffers = {}
             
         if not lane.buffers then error("Lane " .. lane_name .. " is missing waiting areas!") end
+        local maximum_distance = 0
         for _, buffer in pairs(lane.buffers) do
-            table.insert(lane.buffers, {
+            local d = Math.distance(lane.path[2], buffer)
+            table.insert(buffers, {
                 position = buffer,
                 occupied = false,
                 weight = Math.sqdistance(lane.path[1], buffer),
-                distance = Math.distance(lane.path[2], buffer),
+                distance = d
             })
+            if d > maximum_distance then maximum_distance = d end
         end
-        table.sort(buffers, function(a, b) return a.distance < b.distance end)
+        -- table.sort(buffers, function(a, b) return a.distance < b.distance end)
+        lane.maximum_buffer_distance = maximum_distance
         lane.buffers = buffers
     end
 
@@ -497,7 +520,6 @@ function WaveCtrl.init(params)
         active_wave_index = -1,
         waves = {},
         buffers = {},
-        wave_units_by_index = {},
         players_with_ui = {}
     }
 
@@ -571,8 +593,8 @@ return WaveCtrl
 --                         weight = 1, 
 --                         path = {pos1, pos2, ...},
 --                         buffers = {buffer1, buffer2},
---                         groups = { {group_obj = ..., buffer_position = ..., lane_name = ... } },
---                         max_buffer_dist = ...,
+--                         groups = { {group_obj = ..., buffer_key = ..., buffer_position = ..., lane_name = ... } },
+--                         maximum_buffer_distance = ...,
 --                         waiting_group_index = 1,
 --                         move_cmd = {},
 --                         next_active_tick = ...,
@@ -587,10 +609,8 @@ return WaveCtrl
 --                 },
 --                 unit_counts = {} -- copy of to_spawn that doesnt get modified during the game
 --                 duration = 60*60*1.5,
+--                 units_by_number = {},
 --             },
 --         },-
---         wave_units_by_index = { -- Lists unit numbers for all units of all waves.
---             1 = {}
---         }
 --         index -- unique identifier for wave control in global.wave_controls_all
 --     }

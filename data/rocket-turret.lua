@@ -77,6 +77,7 @@ Table.merge_into_first{entity, {
   },
 
   vehicle_impact_sound =  { filename = "__base__/sound/car-metal-impact.ogg", volume = 0.65 },
+  turret_base_has_direction = true,
   
   attack_parameters =
   {
@@ -97,7 +98,7 @@ Table.merge_into_first{entity, {
       starting_frame_speed = 0.2,
       starting_frame_speed_deviation = 0.1
     },
-    turn_range = 0.28,     
+    turn_range = 0.28,
     range = 30,
     min_range = 10,
     sound =

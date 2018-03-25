@@ -65,6 +65,12 @@ local TableGUI = require("Utils.TableViewer")
 
 
 
+-- Command Collection
+
+-- New Decoratives
+-- /c game.player.surface.destroy_decoratives({{-1000, -1000}, {1000, 1000}}); game.player.surface.regenerate_decorative()
+
+
 
 
 -- Game Constants
@@ -83,26 +89,24 @@ for _, p in pairs(buffers) do
 end
 
 local scenario_constants = {
-    spawner_money = 4,
-    wave_money = 8,
-    initial_money = 100,
+    spawner_money = 5,
+    wave_money = 10,
+    initial_money = 15,
     player_spawn_position = {105, -75},
     artillery_initial_ammo = 3,
-    initial_wait = 12 * 60 * 60,
+    initial_wait = 10 * 60 * 60,
+    wave_delay = 5 * 60 * 60,
     lane1 = {
         weight = 1,
-        path = {{201, 66}, {168, 44}, {121, 0}, {121, -50}, {162.5, -72}},
+        path = {{206, 66}, {165, 40}, {121, 0}, {121, -50}, {128, -90}},
         buffers = buffers_1
     },
     lane2 = {
         weight = 0.5, 
-        path = {{213, 71}, {208, 29}, {209, -63}, {197, -75}, {147, -75}, {162.5, -72}},
+        path = {{213, 71}, {208, 29}, {209, -90}, {144, -98}},
         buffers = buffers_2
     },
-    blocking_turrets = {
-        {209, -32},
-        {212, -32}
-    },
+    blocking_turret_count = 4,
     starting_inventory = {
         ["steel-axe"] = 20,
         --["submachine-gun"] = 1,
@@ -138,19 +142,19 @@ local scenario_constants = {
         ["copper-plate"] = 300,
         ["steel-plate"] = 300,
         ["engine-unit"] = 30,
-        ["small-electric-pole"] = 400,
+        ["small-electric-pole"] = 200,
         ["big-electric-pole"] = 50,
         ["small-lamp"] = 200,
         ["pipe"] = 300,
-        ["transport-belt"] = 500,
+        ["transport-belt"] = 600,
         ["underground-belt"] = 100,
         ["splitter"] = 50,
         ["inserter"] = 200,
         ["electric-mining-drill"] = 200,
         ["steel-furnace"] = 200,
         ["assembling-machine-2"] = 30,
-        ["boiler"] = 30,
-        ["steam-engine"] = 60,
+        ["boiler"] = 20,
+        ["steam-engine"] = 40,
         ["pumpjack"] = 10,
         ["oil-refinery"] = 4,
         ["chemical-plant"] = 10,
@@ -212,6 +216,10 @@ local scenario_constants = {
         "military-science-pack",
         "production-science-pack",
         "hightech-science-pack"
+    },
+
+    unlock_recipes = {
+        "rocket-launcher"
     },
 
 
@@ -327,7 +335,7 @@ local scenario_constants = {
         -- },
         {
             name = "Rocket Technology",
-            description = "Unlocks rockets and the rocket turret.",
+            description = "Unlocks rockets and the rocket turret. \n\nYou will need explosives and advanced circuits. ",
             cost = 12,
             icon = "item/rocket",
             unlock = {
@@ -339,7 +347,7 @@ local scenario_constants = {
         },
         {
             name = "Nuclear Technology",
-            description = "Unlocks uranium ammo and nuclear bombs (by the way, there is no friendly fire in this mode).",
+            description = "Unlocks uranium ammo and nuclear bombs (by the way, there is no friendly fire in this mode). \n\nYou will need sulfuric acid and uranium.",
             cost = 12,
             icon = "item/uranium-rounds-magazine",
             unlock = {
@@ -476,11 +484,11 @@ scenario_constants.hints = {
 
 -- TODO: Finish this
 local function make_wave(unit_str, duration, size)
-    if not duration then duration = 5*60*60 end
+    if not duration then duration = scenario_constants.wave_delay end
 
     local wave = {
         lanes = {global.game_control.lane1, global.game_control.lane2},
-        group_size = size or 15,
+        group_size = size or 20,
         group_time_factor = 15,
         unit = {unit_str, 30},
         duration = duration,
@@ -493,11 +501,11 @@ local function init_waves()
     local waves = {
         "b111aa",
         "22bb1",
-        {"c22bb", 10*60*60},
+        {"c22bb", scenario_constants.wave_delay * 2},
         "33cc2",
-        {"d333c", 10*60*60},
+        {"d333c", scenario_constants.wave_delay * 2},
         "4",
-        "4dcc222bbb",
+        "4dcc22bb",
         "44d3c",
         "444dd",
     }
@@ -532,29 +540,39 @@ local function reset_player_force(game_control)
     
 
     -- Research Techs
-    for _, tech in pairs(scenario_constants.unlock_technologies) do
+    for _, tech in pairs(scenario_constants.unlock_technologies or {}) do
         if force.technologies[tech] then
             force.technologies[tech].researched = true
         end
     end
 
     -- Lock recipes
-    for _, recipe in pairs(scenario_constants.lock_recipes) do
+    for _, recipe in pairs(scenario_constants.lock_recipes or {}) do
         if force.recipes[recipe] then
             force.recipes[recipe].enabled = false
+        end
+    end
+
+    -- Unlock recipes
+    for _, recipe in pairs(scenario_constants.unlock_recipes or {}) do
+        if force.recipes[recipe] then
+            force.recipes[recipe].enabled = true
         end
     end
 
     
     -- Hide Techs
     for _, tech in pairs(force.technologies) do
-        if not tech.researched then --and not Table.find(tech.name, scenario_constants.available_techs) then
+        if not tech.researched and not Table.find(tech.name, scenario_constants.available_techs or {}) then
             tech.enabled = false
         end
     end
 
     -- Bonuses
     force.character_running_speed_modifier = force.character_running_speed_modifier + 1
+    for _, player in pairs(force.players) do 
+        player.character_running_speed_modifier = 0
+    end
 end
 
 local function reset_wave_force(game_control)
@@ -682,15 +700,15 @@ local function reset_surface(game_control)
     else
         game.print("Artillery Turret not found!")
     end
-    if scenario_constants.blocking_turrets then
-        game_control.lane_blocking_turrets = {}
-        for i, pos in pairs(scenario_constants.blocking_turrets) do
-            local ent = surface.find_entity("gun-turret", pos)
-            if ent then 
-                game_control.lane_blocking_turrets[i] = ent
-            end
-        end
-    end
+    -- if scenario_constants.blocking_turrets then
+    --     game_control.lane_blocking_turrets = {}
+    --     for i, pos in pairs(scenario_constants.blocking_turrets) do
+    --         local ent = surface.find_entity("gun-turret", pos)
+    --         if ent then 
+    --             game_control.lane_blocking_turrets[i] = ent
+    --         end
+    --     end
+    -- end
     
     -- Set enemy units properly
     for _, ent in pairs(surface.find_entities_filtered{type="unit-spawner", force="wave-enemy"}) do
@@ -821,8 +839,8 @@ Event.register(defines.events.on_entity_died, function(event)
         for i=1, 5 do 
             surface.create_entity{name="small-scorchmark", position=Maths.random_position(pos, 6, false)}
         end
-        for i=1, 5 do 
-            surface.create_entity{name="medium-remnants", position=Maths.random_position(pos, 6, false)}
+        for i=1, 10 do 
+            surface.create_entity{name="big-remnants", position=Maths.random_position(pos, 6, false)}
         end
         for i=1, 5 do 
             surface.create_entity{name="medium-explosion", position=Maths.random_position(pos, 10, false)}
@@ -837,6 +855,16 @@ Event.register(defines.events.on_entity_died, function(event)
         -- event.cause entity is available, do something with it?
     elseif entity.type == "unit-spawner" and global.game_control and entity.force.name == global.game_control.enemy_force.name then 
         UpgradeSystem.give_money(global.game_control.player_force, scenario_constants.spawner_money, global.game_control.surface, {event.entity.position})
+    elseif entity.type == "gun-turret" and entity.force.name == "ally" then
+        game_control.blocking_turret_count = game_control.blocking_turret_count - 1
+        if game_control.blocking_turret_count <= 0 then 
+            game_control.player_force.print("They broke through the defenses on the eastern bridge!")
+        --     for t in pairs({"stone-wall", "gate"}) do 
+        --         for _, ent in pairs(game_control.surface.find_entities_filtered{force="ally", type=t}) do
+        --             ent.die()
+        --         end
+        --     end
+        end 
     end
 end)
 
@@ -1002,6 +1030,7 @@ local function init()
         surface = system.surface,
         player_permission_group = player_permission_group,
         ended = false,
+        blocking_turret_count = scenario_constants.blocking_turret_count
         -- rocket_silo = nil,
         -- artillery_turret = nil
     }
@@ -1043,5 +1072,17 @@ commands.add_command("show_game_globals", "Show Game State", function(event)
     local player = game.players[event.player_index]
     local ui = TableGUI.create("Game Globals")
     TableGUI.create_ui(ui, player)
-    TableGUI.add_table(ui, global.game_control)
+    TableGUI.add_table(ui, "Game Control", global.game_control)
+end)
+
+commands.add_command("testing", "Cheats! Desyncs on player join.", function(event)
+    local game_control = global.game_control
+    if game_control then
+        UpgradeSystem.give_money(game_control.player_force, 1000)
+    end
+    game_control.wave_control.next_wave_tick = game.tick + 3 * 60 * 60
+    scenario_constants.wave_delay = 3 * 60 * 60
+    for _, player in pairs(game_control.player_force.players) do 
+        player.cheat_mode = true
+    end
 end)
