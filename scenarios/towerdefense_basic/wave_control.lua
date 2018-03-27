@@ -1,10 +1,11 @@
 local Math = require("Utils.Maths")
 
-local mod_gui = require("mod-gui")
 local Table = require("Utils.Table")
 local GuiUtils = require("Utils.Gui")
 local GuiEvent = require("stdlib.event.gui")
 local Event = require("stdlib.event.event")
+local mod_gui = require("mod-gui")
+local String = require("Utils.String")
 
 
 require("util")
@@ -81,7 +82,7 @@ local function update_wave_icons(wave_control, element)
             element.style.visible = true
             for entity_name, count in pairs(wave.unit_counts) do
                 if entity_name ~= "total" then
-                    for i = 1, math.ceil(count / 50) do
+                    for i = 1, math.ceil(count / 30) do
                         element.add{type="sprite", name="wave_sprite_" .. entity_name .. i, sprite = "entity/" .. entity_name, tooltip={"entity-name." .. entity_name}}
                     end
                 end
@@ -90,13 +91,13 @@ local function update_wave_icons(wave_control, element)
     end
 end
 
- function WaveCtrl.create_ui(player, wave_control)
-    local mod_flow = mod_gui.get_frame_flow(player)
-    if mod_flow.wave_frame and mod_flow.wave_frame.valid then
+ function WaveCtrl.create_ui(player, wave_control, parent)
+    if parent.wave_frame and parent.wave_frame.valid then
         WaveCtrl.destroy_ui(player)
     end
 
-    local frame = mod_flow.add{type="frame", direction="vertical", name="wave_frame", caption="Wave starting soon."}
+    local frame = parent.add{type="frame", direction="vertical", name="wave_frame", caption="Wave starting soon."}
+    frame.style.maximal_width = 300
 
     -- Icons for next or current wave units
     local flow = frame.add{type="flow", name="wave_display_flow", direction="horizontal"}
@@ -104,24 +105,27 @@ end
 
     GuiUtils.make_hide_button(player, frame, true, "entity/medium-biter")
     wave_control.players_with_ui[player.index] = true
+    return frame
 end
 
 function WaveCtrl.update_ui(player, wave_control)
-    local mod_flow = mod_gui.get_frame_flow(player)
-    if not mod_flow.wave_frame or not mod_flow.wave_frame.valid then
+    local element = mod_gui.get_frame_flow(player)
+    if not element.wave_frame or not element.wave_frame.valid then
         return
     end
 
     if wave_control.spawning_wave_index < 1 then return end
     local total_wave_count = #wave_control.waves
-    if wave_control.active_wave_index < total_wave_count or wave_control.wave_active then
-        if wave_control.wave_active then
-            mod_flow.wave_frame.caption = "Wave " .. wave_control.active_wave_index .. " active!"
-        else
-            mod_flow.wave_frame.caption = "Wave " .. wave_control.spawning_wave_index .. " / " .. total_wave_count .. " in " .. Math.prettytime(wave_control.next_wave_tick - game.tick, true)
-        end
+    if wave_control.wave_active then 
+        element.wave_frame.caption = "Wave " .. wave_control.active_wave_index .. " active!"
+    elseif (wave_control.active_wave_index and wave_control.active_wave_index < total_wave_count) and wave_control.next_wave_tick and wave_control.spawning_wave_index then
+        element.wave_frame.caption = "Wave " .. wave_control.spawning_wave_index .. " / " .. total_wave_count .. " in " .. Math.prettytime(wave_control.next_wave_tick - game.tick, true)
     else
-        mod_flow.wave_frame.caption = "Waves Ended"
+        local s = "Game Ended. " 
+        if wave_control.active_wave_index and not wave_control.ended then 
+            s = s .. "Final Wave: " .. wave_control.active_wave_index
+        end
+        element.wave_frame.caption = s
     end
 end
 
@@ -179,24 +183,26 @@ local function move_next_group(wave_control)
         end
     end
 
-    -- Biters sometimes get stuck in starting area, as a band-aid we kill off all wave units that are still in the starting area after 20 seconds.
+    -- Biters sometimes get stuck in starting area, as a band-aid we kill off all wave units that are still in the starting area after some seconds.
     if not sent_something and not next_tick then
-        for _, ent in pairs(wave_control.surface.find_entities_filtered{type="unit", force=wave_control.wave_force.name}) do
-            local number = ent.unit_number
-            for wave_ind, wave in pairs(wave_control.waves) do
-                if wave.units_by_number and wave.units_by_number[number] then
-                    if wave_ind < wave_control.active_wave_index then 
-                        ent.die()
-                    elseif wave_ind == wave_control.active_wave_index and (not ent.has_command() or Math.distance(ent.position, wave.lanes[1].path[1]) < wave.lanes[1].maximum_buffer_distance + 10) then 
-                        ent.die()
+        for wave_ind, wave in pairs(wave_control.waves) do
+            if not (wave_ind > wave_control.active_wave_index) then 
+                for _, lane in pairs(wave.lanes) do
+                    for _, group in pairs(lane.groups) do
+                        for k, ent in pairs(group.units) do
+                            if ent and ent.valid then
+                                if wave_ind < wave_control.active_wave_index or ent.has_command() or Math.distance(ent.position, wave.lanes[1].path[1]) < wave.lanes[1] then
+                                    ent.die()
+                                end
+                            end
+                        end
                     end
-                    break
                 end
             end
         end
     end
     
-    return next_tick or 40*60
+    return next_tick or 60*60
 end
 
 
@@ -222,16 +228,16 @@ local function spawn_next_unit(wave_control, time_left)
     spawning_wave.to_spawn.total = spawning_wave.to_spawn.total - 1
     local position = wave_control.surface.find_non_colliding_position(unit_type, lane.path[1], 10, 1)
     local unit = wave_control.surface.create_entity{name=unit_type, position = position, force=wave_control.wave_force, }
-    spawning_wave.units_by_number = spawning_wave.units_by_number or {}
-    spawning_wave.units_by_number[unit.unit_number] = true
 
     -- Assign group
     local groups = lane.groups
-    local group
-    if groups[#groups] then group = groups[#groups].group_object end
+    local group_object
+    local group = groups[#groups]
+    
+    if group then group_object = group.group_object end
 
     -- Create new group
-    if not group or #group.members >= spawning_wave.group_size then
+    if not group or #group_object.members >= spawning_wave.group_size then
         -- Select waiting area
         local free_buffer_weights = {}
         local have_buffer = false
@@ -249,10 +255,14 @@ local function spawn_next_unit(wave_control, time_left)
         buffer.occupied = true
 
         -- Create group
-        group = wave_control.surface.create_unit_group{position=buffer.position, force=wave_control.wave_force}
-        table.insert(groups, {group_object = group, lane_name = lane_name, buffer_key = buffer_key, buffer_position = buffer.position})
+        group_object = wave_control.surface.create_unit_group{position=buffer.position, force=wave_control.wave_force}
+        group = {group_object = group_object, lane_name = lane_name, buffer_key = buffer_key, buffer_position = buffer.position, units = {}}
+        table.insert(groups, group)
     end
-    group.add_member(unit)
+    group = groups[#groups]
+    group.group_object.add_member(unit)
+    group.units[unit.unit_number] = unit
+    wave_control.units_by_unit_number[unit.unit_number] = {wave_control.spawning_wave_index, lane_name, #groups}
 
     -- Check if this wave is finished spawning
     if spawning_wave.to_spawn.total <= 0 then
@@ -311,14 +321,14 @@ function WaveCtrl.next_wave(wave_control)
         end
 
         -- Sort list of spawned groups by distance to first waypoint
-        for _, lane in pairs(active_wave.lanes) do
-            table.sort(
-                lane.groups, 
-                function(a, b) 
-                    return Math.sqdistance(a.buffer_position, lane.path[2]) > Math.sqdistance(b.buffer_position, lane.path[2]) 
-                end
-            )
-        end
+        -- for _, lane in pairs(active_wave.lanes) do
+        --     table.sort(
+        --         lane.groups, 
+        --         function(a, b) 
+        --             return Math.sqdistance(a.buffer_position, lane.path[2]) > Math.sqdistance(b.buffer_position, lane.path[2]) 
+        --         end
+        --     )
+        -- end
     end
 end
 
@@ -363,38 +373,54 @@ end
 
 
 
+local function wave_ended(wave_control, wave_ind)
+    -- Wave ended
+    wave_control.wave_active = false
+
+    -- Update Player UI
+    for player_index, has_ui in pairs(wave_control.players_with_ui) do
+        local player = game.players[player_index]
+        if has_ui then 
+            local mod_flow = mod_gui.get_frame_flow(player)            
+            update_wave_icons(wave_control, mod_flow.wave_frame.wave_display_flow)
+        end
+    end
+
+    local game_ended = (wave_ind == Table.count_keys(wave_control.waves))
+    if game_ended then 
+        wave_control.ended = true
+    end
+
+    local raised_event = {wave_index = wave_ind, game_ended = game_ended, wave_control = wave_control}
+    script.raise_event(WaveCtrl.on_wave_destroyed, raised_event)
+end
+
 Event.register(defines.events.on_entity_died, function(event)
     local ent = event.entity
     if ent.type == "unit" then
         for _, wave_control in pairs(global.wave_controls_all) do
             if not wave_control.ended then 
-                for wave_ind, wave in pairs(wave_control.waves) do
-                    local units = wave.units_by_number
-                    if units and units[ent.unit_number] then
-                        units[ent.unit_number] = nil
+                local unit_data = wave_control.units_by_unit_number[ent.unit_number]
+                if unit_data then
+                    local wave_ind = unit_data[1]
+                    local wave = wave_control.waves[wave_ind]
+                    local lane_id = unit_data[2]
+                    local lane = wave.lanes[lane_id]
+                    local group_ind = unit_data[3]
+                    local group = lane.groups[group_ind]
 
-                        -- Wave ended
-                        if next(units) == nil and wave.to_spawn.total <= 0 then
-                            wave_control.wave_active = false
+                    group.units[ent.unit_number] = nil
+                    wave_control.units_by_unit_number[ent.unit_number] = nil
+                    if Table.count_keys(group.units) == 15 then game.print(serpent.block(unit_data)) end
+                    game.print("Unit died." ..  "Wave Index: " .. wave_ind .. "_" .. Table.count_keys(group.units) .. "_" .. String.printable(group.group_object.valid))
+                    if not next(group.units) then
+                        lane.groups[group_ind] = nil
 
-                            -- Update Player UI
-                            for player_index, has_ui in pairs(wave_control.players_with_ui) do
-                                local player = game.players[player_index]
-                                if has_ui then 
-                                    local mod_flow = mod_gui.get_frame_flow(player)            
-                                    update_wave_icons(wave_control, mod_flow.wave_frame.wave_display_flow)
-                                end
-                            end
-
-                            wave.units_by_number = nil
-                            local game_ended = (wave_ind == #wave_control.waves)
-                            if game_ended then WaveCtrl.next_wave(wave_control) end
-
-                            local raised_event = {wave_index = wave_ind, game_ended = game_ended, wave_control = wave_control}
-                            script.raise_event(WaveCtrl.on_wave_destroyed, raised_event)
-                            break
+                        if not next(lane.groups) and wave.to_spawn.total <= 0 then
+                            wave_ended(wave_control, wave_ind)
                         end
                     end
+                    break
                 end
             end
         end
@@ -520,7 +546,8 @@ function WaveCtrl.init(params)
         active_wave_index = -1,
         waves = {},
         buffers = {},
-        players_with_ui = {}
+        players_with_ui = {},
+        units_by_unit_number = {}
     }
 
     local i = 1 
@@ -537,6 +564,8 @@ function WaveCtrl.stop(wave_control, win)
     wave_control.next_wave_tick = nil
     wave_control.next_unit_tick = nil
     wave_control.next_group_tick = nil
+
+    wave_control.wave_active = false
 
     -- Initiate biter celebration 
     local cmd = {
@@ -593,7 +622,11 @@ return WaveCtrl
 --                         weight = 1, 
 --                         path = {pos1, pos2, ...},
 --                         buffers = {buffer1, buffer2},
---                         groups = { {group_obj = ..., buffer_key = ..., buffer_position = ..., lane_name = ... } },
+--                         groups = { 
+--                              {group_obj = ..., buffer_key = ..., buffer_position = ..., lane_name = ... , 
+--                                  units = { unit = ..., unit_number = ... }
+--                              } 
+--                         },
 --                         maximum_buffer_distance = ...,
 --                         waiting_group_index = 1,
 --                         move_cmd = {},
@@ -609,8 +642,10 @@ return WaveCtrl
 --                 },
 --                 unit_counts = {} -- copy of to_spawn that doesnt get modified during the game
 --                 duration = 60*60*1.5,
---                 units_by_number = {},
 --             },
---         },-
+--         },
+--         units_by_unit_number = {
+--             unit_number = {wave_key, lane_key, group_key}
+--         }
 --         index -- unique identifier for wave control in global.wave_controls_all
 --     }

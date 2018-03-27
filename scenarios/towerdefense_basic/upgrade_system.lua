@@ -129,7 +129,7 @@ function UpgradeSystem.get_ui(player)
 end
     
 
--- Award money
+-- Money
 -------------------------------------------------------------------------------
 
 function UpgradeSystem.give_money(force, amount, surface, positions)
@@ -153,6 +153,11 @@ function UpgradeSystem.give_money(force, amount, surface, positions)
             upgradeframe.top_flow.money_label.caption = upgrade_system.money
         end
     end
+end
+
+function UpgradeSystem.get_money(force) 
+    local upgrade_system = UpgradeSystem.get_force_upgrade_system(force)
+    return upgrade_system.money
 end
 
 
@@ -239,7 +244,9 @@ function UpgradeSystem.purchase_upgrade(upgrade_key, buying_player)
                 upgrade.level = level + 1
 
                 -- Update cost
-                if upgrade.cost_increase == "linear" or not upgrade.cost_increase then
+                if type(upgrade.cost_increase) == "number" then
+                    upgrade.cost = upgrade.cost + upgrade.cost_increase
+                elseif upgrade.cost_increase == "linear" or not upgrade.cost_increase then
                     upgrade.cost = upgrade.cost + 1
                 elseif upgrade.cost_increase == "double" or upgrade.cost_increase == "exponential" then
                     upgrade.cost = upgrade.cost * 2
@@ -282,7 +289,7 @@ end
 --     cost = 5,
 --     icon = "item/lab", -- spritepath
 --     max_level = 2, -- optional, if given this upgrade will get multiple levels
---     cost_increase = "double", -- if this upgrade has multiple levels, this determines the way the costs are determined. Can be one of constant, linear, double/exponential. Linear is default.
+--     cost_increase = "double", -- if this upgrade has multiple levels, this determines the way the costs are determined. Can be a number or "double"/"exponential". If given a number, the cost will increase by that count each time. 1 is default.
 --     unlocks = {
 --         tech1, 
 --         tech2, 
