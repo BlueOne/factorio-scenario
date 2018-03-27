@@ -82,6 +82,9 @@ local mod_gui = require("mod-gui")
 -- for _, ent in pairs(game.player.surface.find_entities_filtered{name="centrifuge"}) do table.insert(t, ent.position) end
 -- game.write_file("buffers.txt", serpent.line(t))
 
+-- Remove a few buttons
+-- /c game.player.gui.top.mod_gui_button_flow["creative-mode-fix_main-menu-open-button"].destroy(); game.player.gui.top.mod_gui_button_flow.silo_gui_sprite_button.destroy()
+
 -- Game Constants
 -------------------------------------------------------------------------------
 
@@ -99,7 +102,7 @@ end
 
 local scenario_constants = {
     spawner_money = 3,
-    wave_money = 10,
+    wave_money = 8,
     initial_money = 15,
     player_spawn_position = {105, -75},
     artillery_initial_ammo = 3,
@@ -283,7 +286,7 @@ local scenario_constants = {
         {
             name = "Turret Upgrade",
             description = "Upgrades turret damage.",
-            cost = 4,
+            cost = 6,
             icon = "item/gun-turret",
             unlock = "gun-turret-damage",
             level_max = 3,
@@ -486,7 +489,7 @@ local scenario_constants = {
 }
 
 scenario_constants.hints = {
-    "Biters will come in waves to attack your rocket silo. You win if you survive all waves. You lose if you silo falls. ",
+    "Biters will come in waves to attack your rocket silo. You win if you survive all waves. You lose if your silo falls. ",
     "At the end of each wave your team receives " .. scenario_constants.wave_money .. " alien artifacts. These can be used to purchase upgrades.",
     "Use the artillery turret in an emergency. There is no friendly fire: You cannot hurt allied buildings. ",
     "Some purchasable upgrades correspond to technologies, for example Bullet Upgrade 1 unlocks the Bullet Damage 1 and Bullet Shooting Speed 1 technologies.",
@@ -496,7 +499,7 @@ scenario_constants.hints = {
     [9] = "Final wave. Good luck. "
 }
 
-scenario_constants.ending_message = "Credits: This scenario uses \n - factorio stdlib. \n - predictabowl's rocket turret. \n\n Made by unique_2."
+scenario_constants.ending_message = "Credits: This scenario uses \n - factorio stdlib. \n - predictabowl's rocket turret. \n\n Made by unique_2. Thanks for playing!"
 
 
 
@@ -640,6 +643,14 @@ local function player_enter_game(game_control, player)
         player.cheat_mode = false
         game_control.player_permission_group.add_player(player)
         player.minimap_enabled = true
+
+        -- More Band-aid
+        if player.gui.top.mod_gui_button_flow then
+            for _, button in pairs(player.gui.top.mod_gui_button_flow.children) do
+                if button and button.valid then button.destroy() end
+            end
+        end
+
 
         UpgradeSystem.create_ui(player)
         local mod_flow = mod_gui.get_frame_flow(player)        
@@ -795,7 +806,8 @@ local function restart_game(game_control)
     )
 
     -- Reset Upgrade System
-    UpgradeSystem.init(scenario_constants.upgrades, game_control.player_force, 0)
+    UpgradeSystem.init(scenario_constants.upgrades, game_control.player_force, scenario_constants.initial_money)
+    --UpgradeSystem.give_money(game_control.player_force, scenario_constants.initial_money)
     
     -- Reset Wave System
     game_control.wave_control = WaveCtrl.init{
@@ -948,11 +960,10 @@ Event.register(WaveCtrl.on_wave_starting, function(event)
     local game_control = global.game_control
     if event.wave_index > 0 then
         game_control.player_force.play_sound{path="utility/new_objective", }        
-        game.print("Wave " .. event.wave_index .. " has started.")
+        game_control.player_force.print("Wave " .. event.wave_index .. " has started.")
     else
         game_control.player_force.play_sound{path="utility/new_objective", }                
-        game.print("First wave starting soon!")
-        UpgradeSystem.give_money(global.game_control.player_force, scenario_constants.initial_money, game_control.surface, {game_control.rocket_silo.position})
+        game_control.player_force.print("First wave starting soon!")
     end
 
 end)
@@ -977,8 +988,8 @@ Event.register(WaveCtrl.on_wave_destroyed, function(event)
         end_game(game_control, true)
 
         for _, player in pairs(game_control.player_force.players) do
-            local score = UpgradeSystem.get_
-            mod_gui.get_frame_flow(player).wave_frame.hint_label.caption = "Final Score: " .. game_control.upgrade_system.money .. "\n\n" .. scenario_constants.ending_message or ""
+            local score = UpgradeSystem.get_money(game_control.player_force)
+            mod_gui.get_frame_flow(player).wave_frame.hint_label.caption = "Final Score: " .. score .. "\n\n" .. scenario_constants.ending_message or ""
         end
 
         game_control.player_force.play_sound{path="utility/game_won", }

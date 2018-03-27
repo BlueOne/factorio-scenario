@@ -97,7 +97,7 @@ end
     end
 
     local frame = parent.add{type="frame", direction="vertical", name="wave_frame", caption="Wave starting soon."}
-    frame.style.maximal_width = 300
+    frame.style.maximal_width = 325
 
     -- Icons for next or current wave units
     local flow = frame.add{type="flow", name="wave_display_flow", direction="horizontal"}
@@ -375,6 +375,7 @@ end
 
 local function wave_ended(wave_control, wave_ind)
     -- Wave ended
+    if not wave_control.wave_active then return end
     wave_control.wave_active = false
 
     -- Update Player UI
@@ -411,8 +412,7 @@ Event.register(defines.events.on_entity_died, function(event)
 
                     group.units[ent.unit_number] = nil
                     wave_control.units_by_unit_number[ent.unit_number] = nil
-                    if Table.count_keys(group.units) == 15 then game.print(serpent.block(unit_data)) end
-                    game.print("Unit died." ..  "Wave Index: " .. wave_ind .. "_" .. Table.count_keys(group.units) .. "_" .. String.printable(group.group_object.valid))
+                    --game.print("Unit died." ..  "Wave Index: " .. wave_ind .. "_" .. Table.count_keys(group.units) .. "_" .. String.printable(group.group_object.valid))
                     if not next(group.units) then
                         lane.groups[group_ind] = nil
 

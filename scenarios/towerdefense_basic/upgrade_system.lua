@@ -86,7 +86,7 @@ function UpgradeSystem.create_ui(player)
     label.style.font = "default-large-bold"
     
     label.style.right_padding = 100
-    local value_label = top_flow.add{name="money_label", type="label", caption="0", tooltip = UpgradeSystem.artifact_tooltip}
+    local value_label = top_flow.add{name="money_label", type="label", caption=upgrade_system.money or 0, tooltip = UpgradeSystem.artifact_tooltip}
     value_label.style.font_color = UpgradeSystem.artifact_color
     value_label.style.font = "default-large-bold"
     top_flow.add{type="sprite", sprite=UpgradeSystem.artifact_sprite, name="money_sprite", caption=upgrade_system.money, tooltip = UpgradeSystem.artifact_tooltip}
