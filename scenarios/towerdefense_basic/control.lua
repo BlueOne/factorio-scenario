@@ -24,23 +24,18 @@ local mod_gui = require("mod-gui")
 -- TODO
 -------------------------------------------------------------------------------
 
--- Cliff in SE
 -- License
--- Testing
 
 -- Testing round 2
 
 -- Voting UI
 -- Difficulty ui
 -- Difficulties
-
--- Outside game system
--- Reset surface
+-- Lobby
 
 -- Determine Wave Group movement ticks in advance so they are timed evenly
 
 -- Sort upgrade ui.
--- Table UI is buggy again.
 
 -- Multiplayer Debugging
 -- Player Name
@@ -57,14 +52,19 @@ local mod_gui = require("mod-gui")
 -- Wave System
 -- Upgrade and Money System
 -- Upgrade Data
--- inventory and equipment data
+-- Forces, players set up
 -- Starting inventory and equipment system
+-- inventory and equipment data
+-- Cliff Tools
 -- Map
 -- Loot on map
 -- Map script data
--- Forces, players set up
 -- Rocket Turret
 -- System Sounds
+-- Upgrade UI
+-- Wave UI
+-- Hints
+
 
 
 
@@ -88,7 +88,7 @@ local mod_gui = require("mod-gui")
 -- Game Constants
 -------------------------------------------------------------------------------
 
--- TODO: {x = 217.5, y = 72.5} causes bugs
+-- TODO: {x = 217.5, y = 72.5} causes bugs but it's still on the map.
 local buffers = {{x = 180.5, y = 57.5}, {x = 186.5, y = 41.5}, {x = 187.5, y = 51.5}, {x = 187.5, y = 64.5}, {x = 177.5, y = 73.5}, {x = 181.5, y = 90.5}, {x = 187.5, y = 83.5}, {x = 199.5, y = 57.5}, {x = 207.5, y = 52.5}, {x = 214.5, y = 45.5}, {x = 217.5, y = 53.5}, {x = 195.5, y = 95.5}, {x = 197.5, y = 81.5}, {x = 204.5, y = 87.5}, {x = 221.5, y = 84.5}, {x = 225.5, y = 42.5}, {x = 226.5, y = 59.5}, {x = 233.5, y = 52.5}, {x = 240.5, y = 58.5}, {x = 231.5, y = 83.5}, {x = 233.5, y = 65.5}, {x = 237.5, y = 75.5}}
 local buffers_1 = {}
 local buffers_2 = {}
@@ -102,7 +102,7 @@ end
 
 local scenario_constants = {
     spawner_money = 3,
-    wave_money = 8,
+    wave_money = 10,
     initial_money = 15,
     player_spawn_position = {105, -75},
     artillery_initial_ammo = 3,
@@ -110,7 +110,7 @@ local scenario_constants = {
     wave_delay = 5 * 60 * 60,
     lane1 = {
         weight = 1,
-        path = {{206, 66}, {165, 40}, {121, 0}, {121, -50}, {128, -90}},
+        path = {{206, 66}, {165, 40}, {121, 0}, {120, -37}, {128, -90}},
         buffers = buffers_1
     },
     lane2 = {
@@ -274,22 +274,22 @@ local scenario_constants = {
         {
             name = "Bullet Upgrade",
             description = "Upgrades bullet damage and shooting speed.",
-            cost = 8,
-            cost_increase = 2,
+            cost = 6,
+            cost_increase = 1,
             icon = "item/piercing-rounds-magazine",
             unlock = {
                 "bullet-damage",
                 "bullet-speed"
             },
-            level_max = 3,
+            level_max = 4,
         },
         {
-            name = "Turret Upgrade",
-            description = "Upgrades turret damage.",
-            cost = 6,
+            name = "Gun Turret Upgrade",
+            description = "Upgrades gun turret damage.",
+            cost = 4,
             icon = "item/gun-turret",
             unlock = "gun-turret-damage",
-            level_max = 3,
+            level_max = 4,
         },
         {
             name = "Laser Turret Upgrade",
@@ -372,7 +372,7 @@ local scenario_constants = {
         },
         {
             name = "Nuclear Technology",
-            description = "Unlocks uranium ammo and nuclear bombs (by the way, there is no friendly fire in this mode). \n\nYou will need sulfuric acid and uranium.",
+            description = "Unlocks uranium ammo. \n\nYou will need sulfuric acid and uranium.",
             cost = 20,
             icon = "item/uranium-rounds-magazine",
             unlock = {
@@ -403,12 +403,12 @@ local scenario_constants = {
         },
         {
             name = "Faster Movement",
-            description = "Increases running speed by 80% of vanilla speed.",
+            description = "Increases running speed by 50% of current.",
             cost = 12,
             icon = "item/exoskeleton-equipment",
             max_level = 2,
             action = function(game_control, upgrade_data)
-                game_control.player_force.character_running_speed_modifier = game_control.player_force.character_running_speed_modifier + 0.8
+                game_control.player_force.character_running_speed_modifier = game_control.player_force.character_running_speed_modifier + 1
             end
         },
         -- {
@@ -462,6 +462,7 @@ local scenario_constants = {
             duration_factor = 1,
         }
     },
+    -- Unused
     lobby_positions = { -- Available positions on lobby surface
         {17, -50},
         -- {5, 90},
@@ -499,7 +500,7 @@ scenario_constants.hints = {
     [9] = "Final wave. Good luck. "
 }
 
-scenario_constants.ending_message = "Credits: This scenario uses \n - factorio stdlib. \n - predictabowl's rocket turret. \n\n Made by unique_2. Thanks for playing!"
+scenario_constants.ending_message = "Made by unique_2.\n This scenario uses \n - factorio stdlib. \n - predictabowl's rocket turret. \n\n Thanks for playing!"
 
 
 
@@ -771,9 +772,11 @@ local function reset_surface(game_control)
                 if ent.get_inventory(defines.inventory.chest) then
                     for name, count in pairs(loot_category.items) do
                         ent.insert{name=name, count=count}
+                        ent.destructible = false
                     end
                 else
-                    ScenarioUtils.create_item_chests(surface, ent.position, game_control.neutral_force, loot_category.items) 
+                    local chests = ScenarioUtils.create_item_chests(surface, ent.position, game_control.neutral_force, loot_category.items) 
+                    for _, chest in pairs(chests or {}) do chest.destructible = false end
                 end
             end
         end

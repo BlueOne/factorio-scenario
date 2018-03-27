@@ -416,7 +416,14 @@ Event.register(defines.events.on_entity_died, function(event)
                     if not next(group.units) then
                         lane.groups[group_ind] = nil
 
-                        if not next(lane.groups) and wave.to_spawn.total <= 0 then
+                        local no_units = true
+                        for _, other_lane in pairs(wave.lanes) do
+                            if next(other_lane.groups) ~= nil then
+                                no_units = false
+                            end
+                        end
+
+                        if no_units and wave.to_spawn.total <= 0 then
                             wave_ended(wave_control, wave_ind)
                         end
                     end
