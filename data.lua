@@ -25,6 +25,7 @@ data:extend{
 
 
 -- Short range artillery turret
+-- Would like to be replaced by force.artillery_range_modifier
 local entity, item, recipe = ProtUtils.new_entity("artillery-turret-medium-range", "artillery-turret", "artillery-turret")
 local gun = Table.copy(ProtUtils.gun("artillery-wagon-cannon"))
 
@@ -37,12 +38,13 @@ data:extend{entity, item, recipe, gun}
 
 
 -- Sound
-local function add_utility_sound(name, filename)
-    data.raw["utility-sounds"]["default"][name] =
-    {
-        {
-            filename = filename
-        }
-    }
-end
-add_utility_sound("message", "__core__/sound/message.ogg")
+-- Doesnt work for whatever reason
+-- local function add_utility_sound(name, filename)
+--     data.raw["utility-sounds"]["default"][name] =
+--     {
+--         {
+--             filename = filename
+--         }
+--     }
+-- end
+-- add_utility_sound("message", "__core__/sound/message.ogg")

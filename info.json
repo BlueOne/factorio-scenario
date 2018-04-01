@@ -5,6 +5,6 @@
   "title": "Tower Defense",
   "author": "blueblue",
   "contact": "deep.blueeee@yahoo.de",
-  "description": "So this is tower defense ... nope, it's still factorio, mostly.",
+  "description": "Tower Defense Scenario, Beta Version.",
   "dependencies": ["base >= 0.16.0"]
 }

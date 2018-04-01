@@ -1,11 +1,10 @@
-local Math = require("Utils.Maths")
+local Math = require("Utils/Maths")
 
-local Table = require("Utils.Table")
-local GuiUtils = require("Utils.Gui")
-local GuiEvent = require("stdlib.event.gui")
-local Event = require("stdlib.event.event")
+local Table = require("Utils/Table")
+local GuiUtils = require("Utils/Gui")
+local Event = require("stdlib/event/event")
 local mod_gui = require("mod-gui")
-local String = require("Utils.String")
+local String = require("Utils/String")
 
 
 require("util")
@@ -21,9 +20,9 @@ global.wave_controls_all = global.wave_controls_all or {}
 -- Custom Events
 
 WaveCtrl.on_wave_starting = script.generate_event_name()
--- {wave_index, waves_ended}
+-- {wave_index=, waves_ended=}
 WaveCtrl.on_wave_destroyed = script.generate_event_name()
--- {wave_index, game_ended,  wave_control}
+-- {wave_index=, game_ended=,  wave_control=}
 
 
 
@@ -122,7 +121,7 @@ function WaveCtrl.update_ui(player, wave_control)
         element.wave_frame.caption = "Wave " .. wave_control.spawning_wave_index .. " / " .. total_wave_count .. " in " .. Math.prettytime(wave_control.next_wave_tick - game.tick, true)
     else
         local s = "Game Ended. " 
-        if wave_control.active_wave_index and not wave_control.ended then 
+        if wave_control.active_wave_index then 
             s = s .. "Final Wave: " .. wave_control.active_wave_index
         end
         element.wave_frame.caption = s
@@ -390,11 +389,35 @@ local function wave_ended(wave_control, wave_ind)
     local game_ended = (wave_ind == Table.count_keys(wave_control.waves))
     if game_ended then 
         wave_control.ended = true
+        wave_control.wave_active = false
     end
 
     local raised_event = {wave_index = wave_ind, game_ended = game_ended, wave_control = wave_control}
     script.raise_event(WaveCtrl.on_wave_destroyed, raised_event)
 end
+
+Event.register(-60, function()
+    for _, wave_control in pairs(global.wave_controls_all) do 
+        if not wave_control.ended then
+            for player_index, has_ui in pairs(wave_control.players_with_ui) do
+                if has_ui then
+                    local player = game.players[player_index]
+                    WaveCtrl.update_ui(player, wave_control)
+                end
+            end
+        end
+    end
+end)
+
+Event.register(-10, function() 
+    for _, wave_control in pairs(global.wave_controls_all) do
+        if not wave_control.ended then
+            WaveCtrl.main(wave_control)
+        end
+    end    
+end)
+
+
 
 Event.register(defines.events.on_entity_died, function(event)
     local ent = event.entity
@@ -451,6 +474,7 @@ end
 -- wave = {
 --     lanes = {...}, -- Lanes objects, see example at bottom of file.
 --     group_size = 15,
+--     group_time_factor
 --     unit = {"3b", 5},  -- short form
 --     to_spawn = {  -- or long form
 --         ["big-biter"] = 5,
@@ -595,6 +619,8 @@ function WaveCtrl.destroy(wave_control)
 
     global.wave_controls_all[wave_control.index] = nil
 end
+
+
 
 
 return WaveCtrl

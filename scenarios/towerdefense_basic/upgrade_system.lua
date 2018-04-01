@@ -10,10 +10,10 @@
 local UpgradeSystem = {}
 
 local mod_gui = require("mod-gui")
-local GuiUtils = require("Utils.Gui")
-local Table = require("Utils.Table")
-local Event = require("stdlib.event.event")
-local GuiEvent = require("stdlib.event.gui")
+local GuiUtils = require("Utils/Gui")
+local Table = require("Utils/Table")
+local Event = require("stdlib/event/event")
+local GuiEvent = require("stdlib/event/gui")
 
 
 
@@ -51,7 +51,7 @@ end
 -------------------------------------------------------------------------------
 
 local function formatted_upgrade_name(upgrade)
-    local text = upgrade.name
+    local text = upgrade.title or upgrade.name 
     if upgrade.level or upgrade.level_max then
         text = text .. " " .. (upgrade.level or 1)
     end

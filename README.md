@@ -7,3 +7,6 @@ This is factorio in a tower defense style scenario. It is faster paced than sand
 
 This is an early version of the scenario that is playable but not entirely polished. Balancing could definitely use work, it's missing a few features and there are still some bugs, the most visible ones are related to biters. Nevertheless I think it is enjoyable in its current state. I would like to add difficulty levels eventually but I'd like to get the one difficulty that exists currently balanced first. At this point I'd like to see feedback on pretty much everything in the scenario. 
 
+The scenario makes use of:
+factorio-stdlib
+rocket turrets from Predictabowl's Turrets Mod
