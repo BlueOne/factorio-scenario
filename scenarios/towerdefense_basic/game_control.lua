@@ -1,28 +1,23 @@
 -- game_control.lua
 
 -- Actual Game and Tower Defense logic resides here
+-- There can only be one game running at any given time.
+-- Distinguish from pre game stuff like difficulty selection and lobby.
+
 
 
 local Table = require("Utils/Table")
 local Maths = require("Utils/Maths")
 local ScenarioUtils = require("Utils/Scenario")
-local VoteUI = require("Utils/VoteUI")
 
 local Event = require("stdlib/event/event")
-local StdString = require("stdlib/utils/string")
 
 local WaveCtrl = require("wave_control")
 local UpgradeSystem = require("upgrade_system")
 
-local TableGUI = require("Utils/TableViewer")
 local mod_gui = require("mod-gui")
 
 local cfg = require("cfg")
-
-
--- Actual Game Logic
--- There can only be one game running at any given time.
--- Distinguish from pre game stuff like difficulty selection and lobby.
 
 
 local GameControl = {}
@@ -379,7 +374,7 @@ GameControl.game_constants = {
         },
         hard = {
             title = "Hard",
-            tooltip = "Shorter time between waves.",
+            tooltip = "Hope you know what you are doing. ",
 
             wave_duration_factor = 1.5
         },
@@ -388,6 +383,12 @@ GameControl.game_constants = {
             tooltip = "Veterans beware.",
 
             wave_duration_factor = 1
+        }, 
+        ["insane"] = {
+            title = "Insane",
+            tooltip = "Seriously. It's not meant to be played like this.",
+
+            wave_duration_factor = 0.8
         }
     },
     difficulty_vote_cfg = {
@@ -395,7 +396,7 @@ GameControl.game_constants = {
         title = "Select Difficulty",
         -- description = "",
         -- frame_style = nil,
-        vote = 2*60,
+        duration = 2*60,
         mode = "majority",
     },
 

@@ -26,6 +26,8 @@ local GameControl = require("game_control")
 -- TODO
 -------------------------------------------------------------------------------
 
+-- Make lobby pos nicer
+
 -- License
 
 -- Testing round 2
@@ -98,12 +100,170 @@ local GameControl = require("game_control")
 local System = {}
 System.constants = {
     lobby_positions = { -- Available positions on lobby surface
-        {17, -50},
-        {5, 90},
-        {-134, 22}
+        {17, -55},
+        -- {2, 98},
+        -- {-134, 22}
     },
+
+    player_forbidden_actions = {
+        defines.input_action.open_blueprint_library_gui
+    },
+    observer_forbidden_actions = {
+        defines.input_action.add_permission_group,
+        -- defines.input_action.alt_select_area,
+        -- defines.input_action.alt_select_blueprint_entities,
+        defines.input_action.begin_mining,
+        defines.input_action.begin_mining_terrain,
+        defines.input_action.build_item,
+        defines.input_action.build_rail,
+        defines.input_action.build_terrain,
+        defines.input_action.cancel_craft,
+        defines.input_action.cancel_deconstruct,
+        -- defines.input_action.cancel_new_blueprint,
+        -- defines.input_action.cancel_research	
+        -- defines.input_action.change_active_item_group_for_crafting,
+        -- defines.input_action.change_active_item_group_for_filters,
+        -- defines.input_action.change_active_quick_bar,
+        defines.input_action.change_arithmetic_combinator_parameters,
+        -- defines.input_action.change_blueprint_book_record_label,
+        defines.input_action.change_decider_combinator_parameters,
+        -- defines.input_action.change_item_label,
+        defines.input_action.change_picking_state,
+        defines.input_action.change_programmable_speaker_alert_parameters,
+        defines.input_action.change_programmable_speaker_circuit_parameters,
+        defines.input_action.change_programmable_speaker_parameters,
+        defines.input_action.change_riding_state,
+        defines.input_action.change_shooting_state,
+        -- defines.input_action.change_single_blueprint_record_label,
+        defines.input_action.change_train_stop_station,
+        defines.input_action.change_train_wait_condition,
+        defines.input_action.change_train_wait_condition_data,
+        -- defines.input_action.clean_cursor_stack,
+        -- defines.input_action.clear_selected_blueprint,
+        -- defines.input_action.clear_selected_deconstruction_item,
+        defines.input_action.connect_rolling_stock,
+        defines.input_action.copy_entity_settings,
+        defines.input_action.craft,
+        -- defines.input_action.create_blueprint_like,
+        defines.input_action.cursor_split,
+        defines.input_action.cursor_transfer,
+        defines.input_action.custom_input,
+        -- defines.input_action.cycle_blueprint_book_backwards,
+        -- defines.input_action.cycle_blueprint_book_forwards,
+        -- defines.input_action.deconstruct,
+        -- defines.input_action.delete_blueprint_record,
+        -- defines.input_action.delete_custom_tag,
+        defines.input_action.delete_permission_group,
+        -- defines.input_action.destroy_opened_item
+        defines.input_action.disconnect_rolling_stock,
+        defines.input_action.drag_train_schedule,
+        defines.input_action.drag_train_wait_condition,
+        -- defines.input_action.drop_blueprint_record,
+        defines.input_action.drop_item,
+        -- defines.input_action.drop_to_blueprint_book,
+        -- defines.input_action.edit_custom_tag,
+        defines.input_action.edit_permission_group,
+        defines.input_action.edit_train_schedule,
+        -- defines.input_action.export_blueprint,
+        defines.input_action.fast_entity_split,
+        defines.input_action.fast_entity_transfer,
+        -- defines.input_action.grab_blueprint_record,	
+        -- defines.input_action.gui_checked_state_changed,
+        -- defines.input_action.gui_click,
+        -- defines.input_action.gui_elem_changed,
+        -- defines.input_action.gui_selection_state_changed,
+        -- defines.input_action.gui_text_changed,
+        -- defines.input_action.gui_value_changed,
+        -- defines.input_action.import_blueprint,	
+        -- defines.input_action.import_blueprint_string,
+        defines.input_action.inventory_split, 
+        defines.input_action.inventory_transfer,
+        defines.input_action.launch_rocket,
+        defines.input_action.market_offer,
+        -- defines.input_action.mod_settings_changed,
+        -- defines.input_action.open_achievements_gui,
+        -- defines.input_action.open_blueprint_library_gui,
+        -- defines.input_action.open_blueprint_record,
+        -- defines.input_action.open_bonus_gui,
+        -- defines.input_action.open_character_gui,	
+        -- defines.input_action.open_equipment,
+        -- defines.input_action.open_gui,
+        -- defines.input_action.open_item,
+        -- defines.input_action.open_kills_gui,
+        -- defines.input_action.open_logistic_gui,
+        -- defines.input_action.open_mod_item,
+        -- defines.input_action.open_production_gui,
+        -- defines.input_action.open_technology_gui,
+        -- defines.input_action.open_train_gui,
+        -- defines.input_action.open_train_station_gui,
+        -- defines.input_action.open_trains_gui,
+        defines.input_action.open_tutorials_gui,
+        defines.input_action.paste_entity_settings,
+        defines.input_action.place_equipment,
+        defines.input_action.remove_cables,
+        defines.input_action.reset_assembling_machine,
+        defines.input_action.rotate_entity,
+        defines.input_action.select_area,
+        -- defines.input_action.select_blueprint_entities,
+        defines.input_action.select_entity_slot,
+        defines.input_action.select_gun,
+        defines.input_action.select_item,
+        defines.input_action.select_tile_slot,
+        defines.input_action.set_auto_launch_rocket,
+        -- defines.input_action.set_autosort_inventory,
+        defines.input_action.set_behavior_mode,
+        defines.input_action.set_car_weapons_control,
+        defines.input_action.set_circuit_condition,
+        defines.input_action.set_circuit_mode_of_operation,
+        -- defines.input_action.set_deconstruction_item_tile_selection_mode,
+        -- defines.input_action.set_deconstruction_item_trees_and_rocks_only,
+        defines.input_action.set_entity_color,
+        defines.input_action.set_entity_energy_property,
+        defines.input_action.set_filter,
+        defines.input_action.set_infinity_container_filter_item,
+        defines.input_action.set_infinity_container_remove_unfiltered_items,
+        defines.input_action.set_inserter_max_stack_size,
+        defines.input_action.set_inventory_bar,
+        defines.input_action.set_logistic_filter_item,
+        defines.input_action.set_logistic_filter_signal,
+        defines.input_action.set_logistic_trash_filter_item,
+        defines.input_action.set_request_from_buffers,
+        -- defines.input_action.set_research_finished_stops_game,
+        defines.input_action.set_signal,
+        -- defines.input_action.set_single_blueprint_record_icon,
+        defines.input_action.set_splitter_priority,
+        defines.input_action.set_train_stopped,
+        defines.input_action.setup_assembling_machine,
+        -- defines.input_action.setup_blueprint,
+        -- defines.input_action.setup_single_blueprint_record,
+        defines.input_action.shortcut_quick_bar_transfer,
+        defines.input_action.smart_pipette,
+        defines.input_action.stack_split,
+        defines.input_action.stack_transfer,
+        defines.input_action.start_repair,
+        defines.input_action.start_research,
+        -- defines.input_action.start_walking,
+        defines.input_action.switch_connect_to_logistic_network,
+        defines.input_action.switch_constant_combinator_state,
+        defines.input_action.switch_power_switch_state,
+        defines.input_action.switch_to_rename_stop_gui,	
+        defines.input_action.take_equipment,
+        -- defines.input_action.toggle_deconstruction_item_entity_filter_mode,
+        -- defines.input_action.toggle_deconstruction_item_tile_filter_mode,
+        defines.input_action.toggle_driving,
+        defines.input_action.toggle_enable_vehicle_logistics_while_moving,
+        defines.input_action.toggle_show_entity_info,
+        defines.input_action.use_ability,
+        defines.input_action.use_artillery_remote,
+        defines.input_action.use_item,
+        defines.input_action.wire_dragging,
+        -- defines.input_action.write_to_console,
+    }
 }
 
+
+-- Move players to lobby
+------------------------------------------------------------------------------
 
 Event.register(defines.events.on_player_joined_game, function(event)
     local player = game.players[event.player_index]
@@ -116,10 +276,45 @@ Event.register(defines.events.on_player_joined_game, function(event)
 end)
 
 
+function System.move_player_to_lobby(player)
+    local pos = System.constants.lobby_positions[global.system.lobby_position_index]
+    player.teleport(pos, global.system.lobby_surface)
+    player.character.destroy()
 
--- TODO
--- local function post_end_game()
+    global.system.observer_permission_group.add_player(player)
 
+    player.minimap_enabled = false
+    player.zoom = 1
+
+    -- Make sure UIs are destroyed
+    WaveCtrl.destroy_ui(player)
+    UpgradeSystem.destroy_ui(player)
+end
+
+
+
+
+-- Lobby and Difficulty Select
+-------------------------------------------------------------------------------
+
+
+
+function System.prepare_lobby_surface(surface)
+    for _, ent in pairs(surface.find_entities_filtered{name="nuclear-reactor"}) do
+        ent.temperature = 450
+    end
+
+    for _, ent in pairs(surface.find_entities_filtered{type="unit-spawner"}) do
+        ent.active = false
+    end
+
+    for _, ent in pairs(surface.find_entities_filtered{type="ammo-turret"}) do
+        ent.insert("firearm-magazine")
+    end
+    for _, ent in pairs(surface.find_entities_filtered{type="gun-turret"}) do
+        ent.insert("firearm-magazine")
+    end
+end
 
 
 Event.register(VoteUI.on_vote_finished, function(event)
@@ -153,52 +348,23 @@ Event.register(VoteUI.on_vote_finished, function(event)
 end)
 
 
-
-
-
--- Lobby and Difficulty Select
--------------------------------------------------------------------------------
-
-function System.move_player_to_lobby(player)
-    local pos = System.constants[global.system.lobby_position_index]
-    player.teleport(pos, global.system.lobby_surface)
-
-    player.minimap_enabled = false
-
-    -- Make sure UIs are destroyed
-    WaveCtrl.destroy_ui(player)
-    UpgradeSystem.destroy_ui(player)
-
-    -- Set permissions
-end
-
-
-function System.prepare_lobby_surface(surface)
-    for _, ent in pairs(surface.find_entities_filtered{name="nuclear-reactor"}) do
-        ent.temperature = 450
-    end
-
-    for _, ent in pairs(surface.find_entities_filtered{type="unit-spawner"}) do
-        ent.active = false
-    end
-
-    for _, ent in pairs(surface.find_entities_filtered{type="ammo-turret"}) do
-        ent.insert("firearm-magazine")
-    end
-    for _, ent in pairs(surface.find_entities_filtered{car="gun-turret"}) do
-        ent.insert("firearm-magazine")
-    end
-end
-
-
 -- System
 -------------------------------------------------------------------------------
 
 
 function System.init()
     local lobby_surface = game.surfaces["lobby"] or game.create_surface("lobby")
+
     local player_permission_group = game.permissions.get_group("player_group") or game.permissions.create_group("player_group")
-    player_permission_group.set_allows_action(defines.input_action.open_blueprint_library_gui, false)
+    for _, action in pairs(System.constants.player_forbidden_actions) do
+        player_permission_group.set_allows_action(action, false)
+    end
+
+    local observer_permission_group = game.permissions.get_group("observer_group") or game.permissions.create_group("observer_group")
+    for _, action in pairs(System.constants.observer_forbidden_actions) do
+        observer_permission_group.set_allows_action(action, false)
+    end
+
 
     local system = {
         player_force = game.forces.player,
@@ -210,15 +376,20 @@ function System.init()
         lobby_surface = lobby_surface,
         lane_marker_surface = game.surfaces["lane-markers"],
         player_permission_group = player_permission_group,
+        observer_permission_group = observer_permission_group,
         -- saved_entities = {force = {}},
         -- lobby_position_index = 1,
     }
 
     global.system = system
 
+    -- Init Lobby
     System.prepare_lobby_surface(lobby_surface)
+    global.system.lobby_position_index = math.random(#System.constants.lobby_positions)
 
     for _, player in pairs(game.players) do
+        System.move_player_to_lobby(player)
+
         -- More Band-aid for ui
         if player.gui.top.mod_gui_button_flow then
             for _, button in pairs(player.gui.top.mod_gui_button_flow.children) do
@@ -232,12 +403,16 @@ function System.init()
     VoteUI.init_vote(cfg.name, cfg, GameControl.game_constants.difficulty_vote_options)
 end
 
-
 Event.register(-10, function() 
     if not global.system then 
         System.init()
     end
 end)
+
+
+
+
+-- Register
 
 
 

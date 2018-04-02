@@ -1,5 +1,5 @@
 local cfg = {
-    is_mod = false
+    is_mod = true
 }
 
 return cfg
