@@ -705,12 +705,13 @@ function GameControl.reset_surface(game_control)
             end
         end
 
-        -- Decoratives
-        -- TODO: This is shitty, but anything else would require effort and performance...
-        surface.destroy_decoratives({{-1000, -1000}, {1000, 1000}})
-        game_control.surface.regenerate_decorative()
     end
 
+    -- Decoratives
+    -- TODO: This is shitty, but anything else would require effort and performance...
+    surface.destroy_decoratives({{-1000, -1000}, {1000, 1000}})
+    game_control.surface.regenerate_decorative()
+    
     -- Surface properties
     surface.always_day = false
 
