@@ -22,35 +22,38 @@ local TableGUI = require("Utils/TableViewer")
 
 local GameControl = require("game_control")
 
+local cfg = require("cfg")
+
 
 -- TODO
 -------------------------------------------------------------------------------
 
--- Make lobby pos nicer
 
 -- License
 
+-- Map: Work On Paths, map frame SW
+-- Sprite for alien artifact
+-- Make lobby pos nicer
+-- Format Vote GUI title
+-- Structure this file
 -- Testing round 2
 
 -- Difficulties
 
 
 
--- Lobby
 
 -- Determine Wave Group movement ticks in advance so they are timed evenly
-
--- Sort upgrade ui.
-
 -- Multiplayer Debugging
 -- Player Name
+-- Last Used
 
 -- Low Priority:
--- reset surface
--- Rocket silo death animation nuke?
+-- Sort upgrade ui.
+-- Observers
+-- Rocket silo death animation heavier?
 -- Gfx effects for upgrade purchase at affected entity.
 -- (Edit forces of entities and active/inactive)
--- Observers
 
 
 -- Done: 
@@ -104,6 +107,8 @@ System.constants = {
         -- {2, 98},
         -- {-134, 22}
     },
+
+    game_destroy_delay = 60*60,
 
     player_forbidden_actions = {
         defines.input_action.open_blueprint_library_gui
@@ -279,7 +284,9 @@ end)
 function System.move_player_to_lobby(player)
     local pos = System.constants.lobby_positions[global.system.lobby_position_index]
     player.teleport(pos, global.system.lobby_surface)
-    player.character.destroy()
+    if player.character and player.character.valid then 
+        player.character.destroy()
+    end
 
     global.system.observer_permission_group.add_player(player)
 
@@ -319,7 +326,7 @@ end
 
 Event.register(VoteUI.on_vote_finished, function(event)
     if event.vote_name == GameControl.game_constants.difficulty_vote_cfg.name then
-        game.print("Selected " .. event.option_name)
+        game.print("Selected " .. event.option.title)
     else 
         return
     end
@@ -346,6 +353,7 @@ Event.register(VoteUI.on_vote_finished, function(event)
 
     GameControl.restart(global.game_control, difficulty_settings)
 end)
+
 
 
 -- System
@@ -398,61 +406,88 @@ function System.init()
         end
     end
 
-    local cfg = Table.copy(GameControl.game_constants.difficulty_vote_cfg)
-    cfg.force = system.player_force
-    VoteUI.init_vote(cfg.name, cfg, GameControl.game_constants.difficulty_vote_options)
+    System.start_game_vote()
 end
+
 
 Event.register(-10, function() 
     if not global.system then 
         System.init()
+    elseif global.system.game_destroy_tick and global.system.game_destroy_tick > game.tick then
+        System.end_game()
     end
 end)
 
 
-
-
--- Register
-
-
-
-commands.add_command("dbg_wv", "Debug Wave Controller", function(event) 
-    local player = game.players[event.player_index]
-    if not player.admin then return end
-    player.print(serpent.block(global.game_control.wave_control)) 
-end)
-
-commands.add_command("show_const", "Show Scenario Constants", function(event) 
-    local player = game.players[event.player_index]
-    if not player.admin then return end
-    local ui = TableGUI.create("Scenario Constants")
-    TableGUI.create_ui(ui, player)
-    TableGUI.add_table(ui, "Scenario Constants", GameControl.game_constants)
-end)
-
-commands.add_command("show_game_globals", "Show Game State", function(event) 
-    local player = game.players[event.player_index]
-    if not player.admin then return end
-    local ui = TableGUI.create("Game Globals")
-    TableGUI.create_ui(ui, player)
-    TableGUI.add_table(ui, "Game Control", global.game_control)
-end)
-
-commands.add_command("testing", "Cheats! Desyncs on player join.", function(event)
-    local player = game.players[event.player_index]
-    if not player.admin then return end
-    local game_control = global.game_control
-    if game_control then
-        UpgradeSystem.give_money(game_control.player_force, 1000)
-    end
-    game_control.wave_control.next_wave_tick = game.tick + 3 * 60 * 60
-    game_control.game_constants.wave_duration = 3 * 60 * 60
-    for _, pl in pairs(game_control.player_force.players) do 
-        pl.cheat_mode = true
+Event.register(GameControl.on_game_ended, function()
+    global.system.game_destroy_tick = game.tick + System.constants.game_destroy_delay
+    for _, player in pairs(global.system.player_force.players) do
+        global.system.observer_permission_group.add_player(player)        
     end
 end)
 
-commands.add_command("startvote", "Start a vote for all players to participate in. Example '/startvote Which Technology? |Nuclear|Rocket|Flamethrower'", function(event)
+
+function System.end_game()
+    -- Clean up old game
+    GameControl.destroy_game(global.game_control)
+    
+    -- Move players out of the way
+    global.system.lobby_position_index = math.random(#System.constants.lobby_positions)        
+    global.system.game_destroy_tick = nil
+    for _, player in pairs(global.system.player_force.players) do
+        System.move_player_to_lobby(player)
+    end
+
+    -- Start vote for new game
+    System.start_game_vote()
+end       
+
+function System.start_game_vote()
+    local system = global.system
+    
+    local admin_present = false
+    for _, player in pairs(system.player_force.players) do
+        if player.admin and player.connected then
+            admin_present = true
+            break
+        end
+    end
+
+    local vote_cfg = Table.copy(GameControl.game_constants.difficulty_vote_cfg)
+    local vote = VoteUI.get_vote(vote_cfg.name)
+    if vote then
+        VoteUI.destroy(vote)
+    end
+
+    if not admin_present or cfg.select_difficulty_via_vote then
+        vote_cfg.force = system.player_force
+        VoteUI.init_vote(vote_cfg.name, vote_cfg, GameControl.game_constants.difficulty_vote_options)    
+    else
+        vote_cfg.mode = "single"
+        vote = VoteUI.init_vote(vote_cfg.name, vote_cfg, GameControl.game_constants.difficulty_vote_options)    
+        for _, player in pairs(system.player_force) do
+            if player.admin then
+                VoteUI.add_player(vote, player)
+            end
+        end
+    end
+end
+
+
+
+
+
+-- Commands
+
+
+commands.add_command("reset", "Reset the game.", function(event)
+    local player = game.players[event.player_index]
+    if not player.admin then player.print("Only allowed for admins!") return end
+    game.print("Reset.")
+    System.end_game()
+end)
+
+commands.add_command("startvote", "Start a vote for all players to participate in. Separate title and options with |. Example '/startvote Which Technology? |Nuclear|Rocket|Flamethrower|Moar Faster'", function(event)
     local player = game.players[event.player_index]
     if not event.parameter then 
         player.print("Invalid Input!")
@@ -491,4 +526,48 @@ commands.add_command("startvote", "Start a vote for all players to participate i
     }
 
     VoteUI.init_vote("player-vote", cfg, options)
+end)
+
+Event.register(VoteUI.on_vote_finished, function(event)
+    if event.vote_name == "player-vote" then
+        game.print("Vote Ended. Selected " .. event.option_name)
+    end
+end)
+
+
+
+commands.add_command("dbg_wv", "Debug Wave Controller", function(event) 
+    local player = game.players[event.player_index]
+    if not player.admin then return end
+    player.print(serpent.block(global.game_control.wave_control)) 
+end)
+
+commands.add_command("dbg_show_const", "Show Scenario Constants", function(event) 
+    local player = game.players[event.player_index]
+    if not player.admin then return end
+    local ui = TableGUI.create("Scenario Constants")
+    TableGUI.create_ui(ui, player)
+    TableGUI.add_table(ui, "Scenario Constants", GameControl.game_constants)
+end)
+
+commands.add_command("dbg_show_game_globals", "Show Game State", function(event) 
+    local player = game.players[event.player_index]
+    if not player.admin then return end
+    local ui = TableGUI.create("Game Globals")
+    TableGUI.create_ui(ui, player)
+    TableGUI.add_table(ui, "Game Control", global.game_control)
+end)
+
+commands.add_command("dbg_testing", "Cheats! Desyncs in multiplayer.", function(event)
+    local player = game.players[event.player_index]
+    if not player.admin then return end
+    local game_control = global.game_control
+    if game_control then
+        UpgradeSystem.give_money(game_control.player_force, 1000)
+    end
+    game_control.wave_control.next_wave_tick = game.tick + 3 * 60 * 60
+    game_control.game_constants.wave_duration = 3 * 60 * 60
+    for _, pl in pairs(game_control.player_force.players) do 
+        pl.cheat_mode = true
+    end
 end)

@@ -15,6 +15,7 @@ local Table = require("Utils/Table")
 local Event = require("stdlib/event/event")
 local GuiEvent = require("stdlib/event/gui")
 
+local cfg = require("cfg")
 
 
 
@@ -22,10 +23,12 @@ local GuiEvent = require("stdlib/event/gui")
 -------------------------------------------------------------------------------
 
 UpgradeSystem.artifact_color = {r = 1, g = 0.5, b = 0.7, a = 1}
---local red_color = {r=1, g=0.1, b=0.1, a=0.2}
 UpgradeSystem.artifact_sprite = "item/alien-artifact"
 UpgradeSystem.artifact_tooltip = "Obtain Alien Artifacts by killing waves or spawners."
 
+if not cfg.is_mod then 
+    UpgradeSystem.artifact_sprite = "file/graphics/icons/advanced-circuit.png"
+end
 
 
 

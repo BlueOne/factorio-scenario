@@ -21,6 +21,7 @@ local cfg = require("cfg")
 
 
 local GameControl = {}
+GameControl.on_game_ended = script.generate_event_name()
 
 
 -- TODO: {x = 217.5, y = 72.5} causes bugs but it's still on the map.
@@ -41,6 +42,7 @@ GameControl.game_constants = {
     initial_money = 15,
     player_spawn_position = {105, -75},
     artillery_initial_ammo = 3,
+    artillery_turret_position = {173, -165},
     initial_wait = 10 * 60 * 60,
     wave_duration = 5 * 60 * 60,
     lane1 = {
@@ -145,7 +147,7 @@ GameControl.game_constants = {
         "modular-armor",
         "military-3",
         "concrete",
-        "cluster-grenade",
+        "military-4",
         -- "flammables",
         -- "flamethrower",
         "explosives",
@@ -431,6 +433,8 @@ GameControl.game_constants.hints = {
     [9] = "Final wave. Good luck. "
 }
 
+GameControl.game_constants.ending_message = "Made by unique_2.\n This scenario uses: \n - factorio stdlib \n - Predictabowl's Rocket Turret graphics \n\n Thanks for playing!"
+
 
 
 
@@ -487,7 +491,7 @@ local function init_waves(game_control)
         {"c22bb", game_control.game_constants.wave_duration * 2},
         "33cc2",
         {"d333c", game_control.game_constants.wave_duration * 2},
-        {"4", nil, 4},
+        {"4", nil, 3},
         "4dcc22bb",
         "44d3c",
         "444dd",
@@ -628,14 +632,24 @@ end
 function GameControl.reset_surface(game_control)
     local forces = {game_control.player_force, game_control.neutral_force, game_control.ally_force, game_control.enemy_force, game_control.wave_force}
     local surface = game_control.surface
-    local excluded_types = {["cliff"] = true, }
+    -- TODO: Hope that the bug report on rail remnants goes through
+    local excluded_types = {["cliff"] = true, ["rail-remnants"] = true}
     local excluded_names = {["fish"] = true, }
+
+    for _, ent in pairs(surface.find_entities_filtered{type="item-entity"}) do
+        ent.destroy()
+    end
 
 
     if not global.system.saved_entities then
         -- Remove position markers
         for _, ent in pairs(surface.find_entities_filtered{name="centrifuge"}) do 
             ent.destroy()
+        end
+
+        if not surface.find_entities_filtered{type="artillery-turret"}[1] and cfg.is_mod then
+            local art = surface.create_entity{name="artillery-turret-medium-range", force=game_control.player_force, position=game_control.game_constants.artillery_turret_position}
+            art.insert{name="artillery-shell", count = 2}
         end
 
 
@@ -646,7 +660,6 @@ function GameControl.reset_surface(game_control)
 
         for _, force in pairs(forces) do
             local force_name = force.name
-            global.system.saved_entities[force_name] = {}
             for _, ent in pairs(surface.find_entities_filtered{force=force}) do
                 local entity_type = ent.type
                 local name = ent.name
@@ -658,10 +671,15 @@ function GameControl.reset_surface(game_control)
                     for _, attrib in pairs(entity_attributes[entity_type] or {}) do
                         saved_entity[attrib] = ent[attrib]
                     end
-                    table.insert(global.system.saved_entities[force_name], saved_entity)
+                    table.insert(global.system.saved_entities, saved_entity)
                     -- Activate entities that were set inactive for editing
                     if not ent.active then
                         ent.active = true
+                    end
+
+                    if ent.type == "ammo-turret" or ent.type == "artillery-turret" then            
+                        local inventory = ent.get_inventory(defines.inventory.turret_ammo)
+                        saved_entity.turret_ammo = inventory.get_contents()
                     end
                 end
             end
@@ -669,7 +687,7 @@ function GameControl.reset_surface(game_control)
     else
         -- Remove old entities and recreate from data
         for _, force in pairs(forces) do
-            for _, ent in pairs(surface.find_entities{force=force}) do
+            for _, ent in pairs(surface.find_entities_filtered{force=force}) do
                 if not excluded_types[ent.type] then
                     ent.destroy()
                 end
@@ -677,25 +695,31 @@ function GameControl.reset_surface(game_control)
         end
         local create = surface.create_entity
         for _, ent in pairs(global.system.saved_entities) do
-            create(ent)
+            local new = create(ent)
+            if ent.turret_ammo then
+                for name, count in pairs(ent.turret_ammo) do
+                    new.insert{name=name, count=count}
+                end
+            elseif ent.backer_name then
+                new.backer_name = ent.backer_name
+            end
         end
 
         -- Decoratives
         -- TODO: This is shitty, but anything else would require effort and performance...
         surface.destroy_decoratives({{-1000, -1000}, {1000, 1000}})
-        game_control.surface.generate_decorative()
+        game_control.surface.regenerate_decorative()
     end
 
     -- Surface properties
     surface.always_day = false
 
-    -- Set special entities
+    -- Save special entities
+
     game_control.rocket_silo = game_control.surface.find_entities_filtered{type="rocket-silo", limit=1}[1]
     game_control.rocket_silo.minable = false
-
     -- Until we find a better solution.
     game_control.rocket_silo.force = game_control.player_force
-
 
     game_control.artillery_turret = game_control.surface.find_entities_filtered{type="artillery-turret", limit=1}[1]
     if game_control.artillery_turret then 
@@ -813,6 +837,12 @@ function GameControl.end_game(game_control, win)
     game_control.ended = true
     -- Stop Spawning Units and commence biter celebration
     WaveCtrl.stop(game_control.wave_control, win)
+
+    local event = {
+        win = win
+    }
+
+    script.raise_event(GameControl.on_game_ended, event)
 end
 
 
@@ -825,6 +855,7 @@ function GameControl.destroy_game()
     --     move_to_lobby(player, lobby_pos_index)
     -- end
 
+    if not game_control then return end
     UpgradeSystem.destroy(game_control.player_force)
     WaveCtrl.destroy(game_control.wave_control)
     global.game_control = nil
@@ -952,7 +983,7 @@ Event.register(WaveCtrl.on_wave_destroyed, function(event)
 
         for _, player in pairs(game_control.player_force.players) do
             local score = UpgradeSystem.get_money(game_control.player_force)
-            mod_gui.get_frame_flow(player).wave_frame.hint_label.caption = "Final Score: " .. score .. "\n\n" .. game_control.game_constants.ending_message or ""
+            mod_gui.get_frame_flow(player).wave_frame.hint_label.caption = "Final Score: " .. score .. "\n\n" .. (game_control.game_constants.ending_message or "")
         end
 
         game_control.player_force.play_sound{path="utility/game_won", }

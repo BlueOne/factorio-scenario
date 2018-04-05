@@ -1,3 +1,9 @@
+-- wave_control.lua
+
+-- Control for Tower Defense Waves. 
+-- There should be only one wave controller attacking each force.
+
+
 local Math = require("Utils/Maths")
 
 local Table = require("Utils/Table")
@@ -131,8 +137,10 @@ end
 function WaveCtrl.destroy_ui(player)
     local mod_flow = mod_gui.get_frame_flow(player)
     if mod_flow.wave_frame and mod_flow.wave_frame.valid then
+        GuiUtils.remove_hide_button(player, mod_flow.wave_frame)
         mod_flow.wave_frame.destroy()
     end
+
 
     for _, wave_control in pairs(global.wave_controls_all) do
         wave_control.players_with_ui[player.index] = nil
@@ -578,7 +586,8 @@ function WaveCtrl.init(params)
         waves = {},
         buffers = {},
         players_with_ui = {},
-        units_by_unit_number = {}
+        units_by_unit_number = {},
+        index = #global.wave_controls_all + 1
     }
 
     local i = 1 
@@ -613,7 +622,9 @@ function WaveCtrl.stop(wave_control, win)
 end
 
 function WaveCtrl.destroy(wave_control)
-    for _, player in pairs(game.players) do
+    if not wave_control then return end
+    for player_index in pairs(wave_control.players_with_ui) do
+        local player = game.players[player_index]
         WaveCtrl.destroy_ui(player)
     end
 
