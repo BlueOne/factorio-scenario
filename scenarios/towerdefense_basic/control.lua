@@ -413,7 +413,7 @@ end
 Event.register(-10, function() 
     if not global.system then 
         System.init()
-    elseif global.system.game_destroy_tick and global.system.game_destroy_tick > game.tick then
+    elseif global.system.game_destroy_tick and global.system.game_destroy_tick < game.tick then
         System.end_game()
     end
 end)
@@ -424,6 +424,8 @@ Event.register(GameControl.on_game_ended, function()
     for _, player in pairs(global.system.player_force.players) do
         global.system.observer_permission_group.add_player(player)        
     end
+
+    game.print("The game will automatically restart in a minute.")
 end)
 
 
@@ -459,13 +461,14 @@ function System.start_game_vote()
         VoteUI.destroy(vote)
     end
 
-    if not admin_present or cfg.select_difficulty_via_vote then
+    if game.is_multiplayer() and (not admin_present or cfg.select_difficulty_via_vote) then
         vote_cfg.force = system.player_force
         VoteUI.init_vote(vote_cfg.name, vote_cfg, GameControl.game_constants.difficulty_vote_options)    
     else
         vote_cfg.mode = "single"
+        vote_cfg.duration = nil
         vote = VoteUI.init_vote(vote_cfg.name, vote_cfg, GameControl.game_constants.difficulty_vote_options)    
-        for _, player in pairs(system.player_force) do
+        for _, player in pairs(system.player_force.players) do
             if player.admin then
                 VoteUI.add_player(vote, player)
             end

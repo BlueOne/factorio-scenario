@@ -27,7 +27,8 @@ UpgradeSystem.artifact_sprite = "item/alien-artifact"
 UpgradeSystem.artifact_tooltip = "Obtain Alien Artifacts by killing waves or spawners."
 
 if not cfg.is_mod then 
-    UpgradeSystem.artifact_sprite = "file/graphics/icons/advanced-circuit.png"
+    UpgradeSystem.artifact_sprite = "item/raw-fish"
+    UpgradeSystem.artifact_tooltip = "Obtain Alien Artifacts by killing waves or spawners. \n\nIf you dont like the icon then go download this as a proper mod instead."
 end
 
 

@@ -607,6 +607,10 @@ function WaveCtrl.stop(wave_control, win)
 
     wave_control.wave_active = false
 
+    for player_index, _ in pairs(wave_control.players_with_ui) do
+        local player = game.players[player_index]
+        WaveCtrl.update_ui(player, wave_control)
+    end
     -- Initiate biter celebration 
     local cmd = {
         type = defines.command.attack,
