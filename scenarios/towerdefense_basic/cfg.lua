@@ -8,7 +8,7 @@ local cfg = {
     -- available. To start the game in softmod-mode, copy the directory of this 
     -- scenario to the scenario directory of your factorio installation 
     -- (google it if you need) and set the following to false.
-    is_mod = false ,
+    is_mod = true ,
 
     -- Difficulty can be selected by all players via vote or by admin.
     -- If this is not multiplayer then this choice is ignored.
