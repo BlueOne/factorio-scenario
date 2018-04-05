@@ -282,6 +282,7 @@ end)
 
 
 function System.move_player_to_lobby(player)
+    if not global.system then System.init() end
     local pos = System.constants.lobby_positions[global.system.lobby_position_index]
     player.teleport(pos, global.system.lobby_surface)
     if player.character and player.character.valid then 
